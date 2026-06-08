@@ -76,3 +76,36 @@ export async function createLocalWorkerBrief(idea, task) {
   if (!response.ok) throw new Error(payload.error || `Worker brief failed: ${response.status}`);
   return payload;
 }
+
+export async function runHermesWorker(idea, task) {
+  const response = await fetch('/api/orchestrator/hermes-run', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ idea, task })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Hermes run failed: ${response.status}`);
+  return payload;
+}
+
+export async function createTaskRun(idea, task, mode = 'brief') {
+  const response = await fetch('/api/orchestrator/task-run', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ idea, task, mode })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Task run failed: ${response.status}`);
+  return payload;
+}
+
+export async function updateTaskRun(id, patch) {
+  const response = await fetch('/api/orchestrator/task-run', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, ...patch })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Task update failed: ${response.status}`);
+  return payload;
+}

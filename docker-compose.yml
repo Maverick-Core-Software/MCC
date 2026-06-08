@@ -6,9 +6,16 @@ services:
     environment:
       PROMETHEUS_URL: http://192.168.1.12:9090
       LLAMA_SERVER_URL: http://192.168.1.10:8080
+      HERMES_WORKER_URL: http://192.168.1.10:8787
+      MAV_REPO_BRIDGE_URL: http://192.168.1.10:8790
+      HERMES_TIMEOUT_MS: 300000
+      MAV_CONSOLE_DATA_DIR: /app/data
+      MAV_CONSOLE_WORKSPACE: 'C:\Workspace\Active\homelab-noc-dashboard\homelab-noc-dashboard\homelab-noc-dashboard'
       PORT: 3010
     ports:
       - "3010:3010"
+    volumes:
+      - mav_console_data:/app/data
 
   prometheus:
     build:
@@ -29,14 +36,6 @@ services:
     ports:
       - "9085:9085"
 
-
-  snmp-exporter:
-    image: prom/snmp-exporter:latest
-    container_name: snmp-exporter
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./snmp.yml:/etc/snmp_exporter/snmp.yml
-
 volumes:
   prometheus_data:
+  mav_console_data:

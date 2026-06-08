@@ -21,7 +21,7 @@ export function useMetrics() {
       }
     }
     load();
-    const timer = setInterval(load, 15000);
+    const timer = setInterval(load, 5000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -53,7 +53,7 @@ export function useModelStatus() {
       }
     }
     load();
-    const timer = setInterval(load, 30000);
+    const timer = setInterval(load, 15000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -84,7 +84,7 @@ export function useOrchestratorStatus() {
       }
     }
     load();
-    const timer = setInterval(load, 30000);
+    const timer = setInterval(load, 15000);
     return () => {
       cancelled = true;
       clearInterval(timer);

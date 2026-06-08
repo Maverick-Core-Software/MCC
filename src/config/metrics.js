@@ -1,5 +1,5 @@
 export const PROM_QUERIES = {
-  pcCpu: '100 - (avg(rate(windows_cpu_time_total{job="main_pc",mode="idle"}[5m])) * 100)',
+  pcCpu: '100 - (avg(rate(windows_cpu_time_total{job="main_pc",mode="idle"}[1m])) * 100)',
   pcRam: '(1 - windows_memory_physical_free_bytes{job="main_pc"} / windows_memory_physical_total_bytes{job="main_pc"}) * 100',
   pcRamUsedBytes: 'windows_memory_physical_total_bytes{job="main_pc"} - windows_memory_physical_free_bytes{job="main_pc"}',
   pcRamTotalBytes: 'windows_memory_physical_total_bytes{job="main_pc"}',
@@ -14,26 +14,26 @@ export const PROM_QUERIES = {
   pcDriveDFreeBytes: 'windows_logical_disk_free_bytes{job="main_pc",volume="D:"}',
   pcDriveDTotalBytes: 'windows_logical_disk_size_bytes{job="main_pc",volume="D:"}',
   pcDriveDSmart: 'smartmon_device_smart_healthy{job=~"main_pc|smartctl",device=~".*SN7100.*|.*WD.*256.*|.*D.*"}',
-  pcNetIn: 'max(rate(windows_net_bytes_received_total{job="main_pc"}[5m]) * 8 / 1000 / 1000)',
-  pcNetDirect: 'max(rate(windows_net_bytes_received_total{job="main_pc",interface="Ethernet 2"}[5m]) * 8 / 1000 / 1000)',
-  serverNetSwitch: 'max(rate(node_network_receive_bytes_total{instance="192.168.1.12:9100",device="eth0"}[5m]) * 8 / 1000 / 1000)',
-  serverNetDirect: 'max(rate(node_network_receive_bytes_total{instance="192.168.1.12:9100",device="eth1"}[5m]) * 8 / 1000 / 1000)',
-  serverCpu: '100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[5m])) * 100)',
+  pcNetIn: 'max(rate(windows_net_bytes_received_total{job="main_pc"}[1m]) * 8 / 1000 / 1000)',
+  pcNetDirect: 'max(rate(windows_net_bytes_received_total{job="main_pc",interface="Ethernet 2"}[1m]) * 8 / 1000 / 1000)',
+  serverNetSwitch: 'max(rate(node_network_receive_bytes_total{instance="192.168.1.12:9100",device="eth0"}[1m]) * 8 / 1000 / 1000)',
+  serverNetDirect: 'max(rate(node_network_receive_bytes_total{instance="192.168.1.12:9100",device="eth1"}[1m]) * 8 / 1000 / 1000)',
+  serverCpu: '100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[1m])) * 100)',
   serverRam: '(1 - (node_memory_MemAvailable_bytes{job="node_exporter"} / node_memory_MemTotal_bytes{job="node_exporter"})) * 100',
   rootDisk: '(1 - (node_filesystem_avail_bytes{job="node_exporter",mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{job="node_exporter",mountpoint="/",fstype!~"tmpfs|overlay"})) * 100',
   dataDisk: '(1 - (node_filesystem_avail_bytes{job="node_exporter",mountpoint="/data",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{job="node_exporter",mountpoint="/data",fstype!~"tmpfs|overlay"})) * 100',
   pcUp: 'up{instance="192.168.1.10:9182"}',
   serverUp: 'up{instance="192.168.1.12:9100"}',
-  wanDown: 'homelab_wan_download_gbps or vector(0)',
-  wanUp: 'homelab_wan_upload_gbps or vector(0)',
+  wanDown: 'rate(att_broadband_ipv4_receive_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000 / 1000',
+  wanUp: 'rate(att_broadband_ipv4_transmit_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000 / 1000',
   switchPort1Rx: 'netgear_switch_port_rx_mbps{port="1"}',
   switchPort1Tx: 'netgear_switch_port_tx_mbps{port="1"}',
   switchPort2Rx: 'netgear_switch_port_rx_mbps{port="2"}',
   switchPort2Tx: 'netgear_switch_port_tx_mbps{port="2"}',
   switchPort3Rx: 'netgear_switch_port_rx_mbps{port="3"}',
   switchPort3Tx: 'netgear_switch_port_tx_mbps{port="3"}',
-  switchPort23Rx: 'netgear_switch_port_rx_mbps{port="23"}',
-  switchPort23Tx: 'netgear_switch_port_tx_mbps{port="23"}'
+  switchPort24Rx: 'rate(att_broadband_ipv4_receive_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000',
+  switchPort24Tx: 'rate(att_broadband_ipv4_transmit_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000'
 };
 
 export const FALLBACK = {
@@ -70,6 +70,6 @@ export const FALLBACK = {
   switchPort2Tx: null,
   switchPort3Rx: null,
   switchPort3Tx: null,
-  switchPort23Rx: null,
-  switchPort23Tx: null
+  switchPort24Rx: null,
+  switchPort24Tx: null
 };

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as echarts from 'echarts';
 import { useMetrics, useModelStatus, useOrchestratorStatus } from './hooks/useMetrics.js';
-import { createLocalWorkerBrief, createOrchestratorPlan } from './lib/api.js';
+import { createLocalWorkerBrief, createOrchestratorPlan, createTaskRun, updateTaskRun } from './lib/api.js';
 import {
   clampPercent,
   colorFor,
@@ -14,11 +14,11 @@ import {
 } from './lib/format.js';
 import './styles.css';
 
-function Gauge({ label, value, sublabel, color, max = 100, unit = '%', compact = false, valueText = null }) {
+function Gauge({ label, value, sublabel, color, max = 100, unit = '%', compact = false, valueText = null, decimals = 0 }) {
   const ref = useRef(null);
   const chartRef = useRef(null);
   const safeValue = value == null ? 0 : Number(value);
-  const displayValue = valueText ?? (value == null ? 'N/A' : Math.round(safeValue).toString());
+  const displayValue = valueText ?? (value == null ? 'N/A' : safeValue.toFixed(decimals));
   const accent = color || colorFor(safeValue);
 
   useEffect(() => {
@@ -168,6 +168,7 @@ function Workstation({ metrics }) {
           value={metrics.pcRam}
           sublabel={`${ramUsed} / ${ramTotal}`}
           color="#d9bf6f"
+          decimals={1}
         />
       </div>
       <div className="hardwareSpecStrip">
@@ -221,28 +222,35 @@ function ModelOps({ metrics, modelStatus }) {
     ? (metrics.pcGpuMemUsedBytes / metrics.pcGpuMemTotalBytes) * 100
     : null;
   const modelOnline = modelStatus.state === 'online';
+  const gpuLoad = metrics.pcGpu == null ? null : clampPercent(metrics.pcGpu);
+  const runtimeState = !modelOnline
+    ? 'OFFLINE'
+    : gpuLoad != null && gpuLoad >= 10
+      ? 'GENERATING'
+      : 'LOADED / IDLE';
 
   return (
     <Panel title="LOCAL AI CORE" className="modelOps">
       <div className="modelOpsGrid">
-        <div className={`modelState ${modelOnline ? 'online' : 'offline'}`}>
+        <div className={`modelState ${modelOnline ? 'online' : 'offline'} ${runtimeState === 'GENERATING' ? 'generating' : ''}`}>
           <span>MODEL</span>
           <strong>{compactModelName(modelStatus.model)}</strong>
-          <em>{modelStatus.state.toUpperCase()}</em>
+          <em>{runtimeState}</em>
         </div>
         <Gauge
           label="GPU LOAD"
           value={metrics.pcGpu}
-          sublabel="RTX 4060 Ti"
+          sublabel="COMPUTE NOW"
           color="#7da6d8"
           compact
         />
         <Gauge
-          label="VRAM"
+          label="VRAM ALLOCATED"
           value={gpuMemPercent}
           sublabel={`${gpuMemUsedGb} / ${gpuMemTotalGb}`}
           color="#d9bf6f"
           compact
+          decimals={1}
         />
       </div>
       <div className="modelMetaGrid">
@@ -351,13 +359,13 @@ function HardwareNetworkMap({ metrics }) {
           <path className="flowLink good" d="M350 0 L350 58" />
           <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M490 0 L490 58" />
         </svg>
-        <span className="topoPort gatewayPort">23</span>
+        <span className="topoPort gatewayPort">24</span>
         <span className="topoPort pcPort">3</span>
         <span className="topoPort meshPort">2</span>
         <span className="topoPort serverPort">1</span>
         <div className="topoDevice gatewayDevice">
           <span>2.5Gb AT&amp;T Fiber Gateway</span>
-          <strong>Port 23 / Main In</strong>
+          <strong>Port 24 / Main In</strong>
           <em>{gatewayRate} DOWN</em>
         </div>
         <div className={`topoDevice pcDevice ${pcOnline ? 'online' : 'offline'}`}>
@@ -378,7 +386,7 @@ function HardwareNetworkMap({ metrics }) {
       </div>
       <div className="hardwarePortMap">
         {[
-          ['23', 'AT&T Fiber Gateway', 'ACTIVE', formatPortRate(metrics.switchPort23Rx, metrics.switchPort23Tx)],
+          ['24', 'AT&T Fiber Gateway', 'ACTIVE', formatPortRate(metrics.switchPort24Rx, metrics.switchPort24Tx)],
           ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
           ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
           ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
@@ -516,7 +524,7 @@ function NetworkMapPage({ metrics }) {
                 <i
                   key={index}
                   className={[
-                    index === 22 ? `hot ${gatewayClass}` : '',
+                    index === 23 ? `hot ${gatewayClass}` : '',
                     index === 0 ? `hot ${serverOnline ? serverClass : 'danger'}` : '',
                     index === 1 ? `hot ${meshClass}` : '',
                     index === 2 ? `hot ${pcOnline ? pcClass : 'danger'}` : ''
@@ -527,7 +535,7 @@ function NetworkMapPage({ metrics }) {
             <span className={`portAnchor port1 ${serverOnline ? serverClass : 'danger'}`} title="Port 1" />
             <span className={`portAnchor port2 ${meshClass}`} title="Port 2" />
             <span className={`portAnchor port3 ${pcOnline ? pcClass : 'danger'}`} title="Port 3" />
-            <span className={`portAnchor port23 ${gatewayClass}`} title="Port 23" />
+            <span className={`portAnchor port24 ${gatewayClass}`} title="Port 24" />
           </div>
           <div className={`mapNode workstationNode ${pcOnline ? 'online' : 'offline'}`}>
             <span>Main Workstation</span>
@@ -546,12 +554,6 @@ function NetworkMapPage({ metrics }) {
           </div>
 
           <svg className="mapLines" viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="linkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#dce6ef" />
-                <stop offset="100%" stopColor="#6aa7d9" />
-              </linearGradient>
-            </defs>
             <path className={`staticLink ${gatewayClass}`} d="M500 62 L500 105" />
             <path className={`staticLink ${gatewayClass}`} d="M500 150 L500 205" />
             <path className={`staticLink ${gatewayClass}`} d="M500 220 L500 238" />
@@ -572,7 +574,7 @@ function NetworkMapPage({ metrics }) {
       <Panel title="PORT MAP" className="portPanel">
         <div className="portRows">
           {[
-            ['23', 'Gateway Router', 'ACTIVE', formatPortRate(metrics.switchPort23Rx, metrics.switchPort23Tx)],
+            ['24', 'Gateway Router', 'ACTIVE', formatPortRate(metrics.switchPort24Rx, metrics.switchPort24Tx)],
             ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
             ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
             ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
@@ -595,6 +597,8 @@ function NetworkMapPage({ metrics }) {
 function workerLabel(workerId) {
   const labels = {
     'local-qwen': 'LOCAL QWEN',
+    'hermes-qwen': 'HERMES QWEN',
+    'repo-bridge': 'REPO BRIDGE',
     'codex-review': 'CODEX REVIEW',
     'claude-cli': 'CLAUDE CLI',
     'rag-server': 'RAG SERVER'
@@ -607,10 +611,16 @@ function OrchestratorPage({ modelStatus }) {
   const [idea, setIdea] = useState('Build an app with my standard tech stack that tells me where the closest ice cream shop is when it is 100 degrees outside.');
   const [activeRun, setActiveRun] = useState(null);
   const [workerBrief, setWorkerBrief] = useState(null);
+  const [taskRuns, setTaskRuns] = useState([]);
   const [busy, setBusy] = useState(false);
   const [briefBusyId, setBriefBusyId] = useState(null);
+  const [reviewBusyId, setReviewBusyId] = useState(null);
   const [error, setError] = useState(null);
   const run = activeRun || orchestratorStatus.runs?.[0] || null;
+
+  useEffect(() => {
+    setTaskRuns(orchestratorStatus.taskRuns || []);
+  }, [orchestratorStatus.taskRuns]);
 
   async function handlePlan(event) {
     event.preventDefault();
@@ -637,6 +647,33 @@ function OrchestratorPage({ modelStatus }) {
       setError(nextError.message);
     } finally {
       setBriefBusyId(null);
+    }
+  }
+
+  async function handleTaskRun(task) {
+    setBriefBusyId(task.id);
+    setError(null);
+    try {
+      const next = await createTaskRun(run.idea, task, 'brief');
+      setTaskRuns((current) => [next, ...current.filter((item) => item.id !== next.id)]);
+      setWorkerBrief({ task, brief: next.output || next.error || 'Task run completed without output.', createdAt: next.finishedAt, ledgerRun: next });
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setBriefBusyId(null);
+    }
+  }
+
+  async function handleRunStatus(id, patch) {
+    setReviewBusyId(id);
+    setError(null);
+    try {
+      const next = await updateTaskRun(id, patch);
+      setTaskRuns((current) => current.map((item) => item.id === id ? next : item));
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setReviewBusyId(null);
     }
   }
 
@@ -685,7 +722,14 @@ function OrchestratorPage({ modelStatus }) {
                     disabled={task.worker !== 'local-qwen' || briefBusyId === task.id}
                     onClick={() => handleBrief(task)}
                   >
-                    {briefBusyId === task.id ? 'Briefing...' : 'Brief'}
+                    Brief
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!['local-qwen', 'hermes-qwen'].includes(task.worker) || briefBusyId === task.id}
+                    onClick={() => handleTaskRun(task)}
+                  >
+                    {briefBusyId === task.id ? 'Running...' : 'Run + Log'}
                   </button>
                 </div>
               ))}
@@ -696,6 +740,45 @@ function OrchestratorPage({ modelStatus }) {
           </>
         ) : (
           <div className="emptyPlan">No run yet. Create a plan to route work across local and hosted workers.</div>
+        )}
+      </Panel>
+
+      <Panel title="TASK LEDGER" className="ledgerPanel">
+        {taskRuns.length ? (
+          <div className="ledgerList">
+            {taskRuns.slice(0, 8).map((taskRun) => (
+              <div className="ledgerRow" key={taskRun.id}>
+                <div>
+                  <strong>{taskRun.taskTitle}</strong>
+                  <span>{workerLabel(taskRun.worker)} / {taskRun.status}</span>
+                  <em>{taskRun.changedFiles?.length ? taskRun.changedFiles.join(', ') : 'No changed files captured yet'}</em>
+                  {taskRun.diffStat ? <code>{taskRun.diffStat}</code> : null}
+                </div>
+                <div className="ledgerBadges">
+                  <span>{taskRun.reviewStatus}</span>
+                  <span>{taskRun.deployStatus}</span>
+                </div>
+                <div className="ledgerActions">
+                  <button
+                    type="button"
+                    disabled={reviewBusyId === taskRun.id || taskRun.reviewStatus === 'approved'}
+                    onClick={() => handleRunStatus(taskRun.id, { reviewStatus: 'approved', status: 'approved', deployStatus: 'ready' })}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={reviewBusyId === taskRun.id || taskRun.deployStatus === 'deployed'}
+                    onClick={() => handleRunStatus(taskRun.id, { deployStatus: 'deployed', status: 'deployed' })}
+                  >
+                    Deployed
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="emptyPlan">No task runs logged yet. Use Run + Log to create the first audit record.</div>
         )}
       </Panel>
 

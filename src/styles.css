@@ -268,6 +268,11 @@ body {
   min-height: 360px;
 }
 
+.ledgerPanel {
+  grid-column: span 7;
+  min-height: 360px;
+}
+
 .briefPanel {
   grid-column: span 5;
   min-height: 360px;
@@ -278,6 +283,7 @@ body {
 .verifyRail,
 .briefPanel pre,
 .briefTask,
+.ledgerList,
 .emptyPlan {
   position: relative;
   z-index: 1;
@@ -301,7 +307,7 @@ body {
 
 .taskRow {
   display: grid;
-  grid-template-columns: 1.1fr 96px 1.25fr 72px;
+  grid-template-columns: 1fr 86px 1.05fr 64px 86px;
   gap: 8px;
   align-items: center;
   min-height: 58px;
@@ -334,7 +340,8 @@ body {
 
 .taskRow button {
   padding: 7px 8px;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .verifyRail {
@@ -374,6 +381,102 @@ body {
   background: #0f1118;
   color: #dfe6ee;
   font: 700 12px/1.45 Consolas, "Courier New", monospace;
+}
+
+.ledgerList {
+  display: grid;
+  gap: 8px;
+}
+
+.ledgerRow {
+  display: grid;
+  grid-template-columns: 1fr 150px 154px;
+  gap: 10px;
+  align-items: center;
+  min-height: 76px;
+  padding: 10px;
+  background: #11131a;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.ledgerRow strong,
+.ledgerRow span,
+.ledgerRow em,
+.ledgerRow code {
+  display: block;
+}
+
+.ledgerRow strong {
+  color: #f0f2f4;
+  font-size: 17px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ledgerRow span {
+  margin-top: 6px;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ledgerRow em {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.ledgerRow code {
+  max-height: 42px;
+  margin-top: 7px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  color: #b9d2ed;
+  font: 700 11px/1.25 Consolas, "Courier New", monospace;
+}
+
+.ledgerBadges {
+  display: grid;
+  gap: 6px;
+}
+
+.ledgerBadges span {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: rgba(107,158,216,.13);
+  color: #b9d2ed;
+}
+
+.ledgerActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ledgerActions button {
+  border: 0;
+  border-radius: 3px;
+  padding: 7px 6px;
+  background: linear-gradient(180deg, #9ccf86, #5f9f64);
+  color: #07100a;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ledgerActions button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .emptyPlan {
@@ -653,6 +756,10 @@ body {
   box-shadow: inset 0 0 0 1px rgba(199,80,80,.28);
 }
 
+.modelState.generating {
+  box-shadow: inset 0 0 0 1px rgba(217,191,111,.34);
+}
+
 .modelState span,
 .modelState strong,
 .modelState em,
@@ -686,6 +793,10 @@ body {
 
 .modelState.offline em {
   color: var(--red);
+}
+
+.modelState.generating em {
+  color: #d9bf6f;
 }
 
 .modelMetaGrid {
@@ -1323,23 +1434,20 @@ body {
 }
 
 .mapLines .staticLink {
-  stroke: rgba(230, 238, 247, .54);
+  stroke: rgba(117,191,114,.5);
   stroke-width: 6;
-  filter: drop-shadow(0 0 8px rgba(88, 166, 255, .16));
+  filter: drop-shadow(0 0 8px rgba(117,191,114,.22));
 }
 
 .mapLines .flowLink {
-  stroke: #75bf72;
+  stroke: var(--green);
   stroke-width: 3;
-  stroke-dasharray: 12 18;
+  stroke-dasharray: 12 16;
   animation: linkFlow 2.4s linear infinite;
-  filter: drop-shadow(0 0 8px rgba(102, 212, 255, .34));
 }
 
-.mapLines .staticLink.good { stroke: rgba(117,191,114,.58); }
-.mapLines .staticLink.warn { stroke: rgba(217,191,111,.66); }
-.mapLines .staticLink.danger { stroke: rgba(199,80,80,.72); }
-.mapLines .flowLink.good { stroke: var(--green); }
+.mapLines .staticLink.warn { stroke: rgba(217,191,111,.62); }
+.mapLines .staticLink.danger { stroke: rgba(199,80,80,.68); }
 .mapLines .flowLink.warn { stroke: var(--yellow); }
 .mapLines .flowLink.danger { stroke: var(--red); }
 
@@ -1479,7 +1587,7 @@ body {
   box-shadow: 0 0 12px rgba(199,80,80,.72);
 }
 
-.mapNode .portAnchor.port23 {
+.mapNode .portAnchor.port24 {
   left: 164px;
   top: -7px;
 }
@@ -1579,11 +1687,13 @@ body {
   .orchestratorCommand,
   .workerRouter,
   .planPanel,
+  .ledgerPanel,
   .briefPanel {
     grid-column: auto;
   }
 
-  .taskRow {
+  .taskRow,
+  .ledgerRow {
     grid-template-columns: 1fr;
   }
 
@@ -1611,12 +1721,6 @@ body {
   .workstationNode { top: 420px; }
   .serverNode { top: 520px; }
   .meshNode { bottom: 20px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mapLines .flowLink {
-    animation: none;
-  }
 }
 
 @media (max-width: 560px) {
