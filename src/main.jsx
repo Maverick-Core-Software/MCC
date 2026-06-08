@@ -1,0 +1,619 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import * as echarts from 'echarts';
+import { useMetrics, useModelStatus } from './hooks/useMetrics.js';
+import {
+  clampPercent,
+  colorFor,
+  diskUsedPercent,
+  formatCompactNumber,
+  formatGbFromBytes,
+  formatPortRate,
+  smartLabel
+} from './lib/format.js';
+import './styles.css';
+
+function Gauge({ label, value, sublabel, color, max = 100, unit = '%', compact = false, valueText = null }) {
+  const ref = useRef(null);
+  const chartRef = useRef(null);
+  const safeValue = value == null ? 0 : Number(value);
+  const displayValue = valueText ?? (value == null ? 'N/A' : Math.round(safeValue).toString());
+  const accent = color || colorFor(safeValue);
+
+  useEffect(() => {
+    if (!ref.current) return undefined;
+    chartRef.current = echarts.init(ref.current, null, { renderer: 'canvas' });
+    const resize = () => chartRef.current?.resize();
+    window.addEventListener('resize', resize);
+    return () => {
+      window.removeEventListener('resize', resize);
+      chartRef.current?.dispose();
+      chartRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const ratioValue = value == null ? 0 : Math.max(0, Math.min(max, safeValue));
+    chartRef.current.setOption({
+      animationDuration: 500,
+      series: [
+        {
+          type: 'gauge',
+          startAngle: 210,
+          endAngle: -30,
+          min: 0,
+          max,
+          radius: '96%',
+          center: ['50%', '53%'],
+          splitNumber: 4,
+          progress: {
+            show: true,
+            roundCap: true,
+            width: compact ? 8 : 11,
+            itemStyle: {
+              color: {
+                type: 'linear',
+                x: 0,
+                y: 0,
+                x2: 1,
+                y2: 0,
+                colorStops: [
+                  { offset: 0, color: accent },
+                  { offset: 1, color: '#f1f7ff' }
+                ]
+              },
+              shadowBlur: 8,
+              shadowColor: accent
+            }
+          },
+          axisLine: {
+            roundCap: true,
+            lineStyle: { width: compact ? 8 : 11, color: [[1, '#2b2f39']] }
+          },
+          axisTick: { show: false },
+          splitLine: { show: false },
+          axisLabel: { show: false },
+          pointer: { show: false },
+          anchor: { show: false },
+          detail: { show: false },
+          data: [{ value: ratioValue }]
+        }
+      ]
+    });
+  }, [accent, compact, max, safeValue, value]);
+
+      return (
+    <div className="gaugeShell">
+      <div ref={ref} className="gaugeChart" />
+      <div className="gaugeValue" style={{ color: accent }}>
+        {displayValue}
+        {valueText == null && value != null ? unit : ''}
+      </div>
+      <div className="gaugeLabel">{label}</div>
+      {sublabel ? <div className="gaugeSub">{sublabel}</div> : null}
+    </div>
+  );
+}
+
+function Panel({ title, children, className = '' }) {
+  return (
+    <section className={`panel ${className}`}>
+      {title ? <div className="panelTitle">{title}</div> : null}
+      {children}
+    </section>
+  );
+}
+
+function compactModelName(name) {
+  if (!name) return 'NO MODEL';
+  return name.replace(/^qwen/i, 'Qwen').replace(/-/g, ' ');
+}
+
+function TopBar({ status, modelStatus }) {
+  const [view, setView] = useDashboardView();
+  const time = useMemo(() => {
+    const now = status.updatedAt || new Date();
+    return new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }).format(now);
+  }, [status.updatedAt]);
+  return (
+    <header className="topBar">
+      <div className="brandMark">MAV-CONSOLE</div>
+      <div className="clockBlock">
+        <div>{time}</div>
+        <span>{status.state === 'online' ? 'PROMETHEUS ONLINE' : status.state.toUpperCase()}</span>
+      </div>
+      <nav className="viewToggle" aria-label="Dashboard view">
+        <button className={view === 'hardware' ? 'active' : ''} onClick={() => setView('hardware')}>Hardware</button>
+        <button className={view === 'network' ? 'active' : ''} onClick={() => setView('network')}>Network Map</button>
+      </nav>
+      <div className={`agentStatus ${modelStatus.state === 'online' ? 'online' : 'offline'}`}>
+        LOCAL MODEL: <strong>{compactModelName(modelStatus.model)}</strong>
+        <em>|</em>
+        <span>{modelStatus.state.toUpperCase()}</span>
+      </div>
+    </header>
+  );
+}
+
+const DashboardViewContext = React.createContext(['hardware', () => {}]);
+
+function useDashboardView() {
+  return React.useContext(DashboardViewContext);
+}
+
+function Workstation({ metrics }) {
+  const ramUsed = formatGbFromBytes(metrics.pcRamUsedBytes);
+  const ramTotal = formatGbFromBytes(metrics.pcRamTotalBytes);
+  const driveCUsed = diskUsedPercent(metrics.pcDriveCFreeBytes, metrics.pcDriveCTotalBytes, metrics.pcDrive);
+  const driveDUsed = diskUsedPercent(metrics.pcDriveDFreeBytes, metrics.pcDriveDTotalBytes, metrics.pcDriveD);
+  return (
+    <Panel title="WORKSTATION: INTEL i5-13600K" className="workstation">
+      <div className="gaugeRow pcGaugeRow">
+        <Gauge label="CPU" value={metrics.pcCpu} sublabel="INTEL i5-13600K" />
+        <Gauge
+          label="GPU"
+          value={metrics.pcGpu}
+          sublabel="RTX 4060 Ti 16GB"
+          color="#7da6d8"
+        />
+        <Gauge
+          label="RAM"
+          value={metrics.pcRam}
+          sublabel={`${ramUsed} / ${ramTotal}`}
+          color="#d9bf6f"
+        />
+      </div>
+      <div className="hardwareSpecStrip">
+        <div>
+          <span>CPU</span>
+          <strong>Intel i5-13600K</strong>
+        </div>
+        <div>
+          <span>GPU</span>
+          <strong>RTX 4060 Ti 16GB</strong>
+        </div>
+        <div>
+          <span>BOARD</span>
+          <strong>ASUS Z690</strong>
+        </div>
+        <div>
+          <span>RAM</span>
+          <strong>64GB DDR4</strong>
+        </div>
+      </div>
+      <div className="driveGrid">
+        <DriveBlock
+          name="2TB WD-Black SN7100"
+          mount="C: NVME"
+          used={driveCUsed}
+          freeBytes={metrics.pcDriveCFreeBytes}
+          totalBytes={metrics.pcDriveCTotalBytes}
+          smart={metrics.pcDriveCSmart}
+        />
+        <DriveBlock
+          name="256GB WD-Black SN7100"
+          mount="SECOND NVME"
+          used={driveDUsed}
+          freeBytes={metrics.pcDriveDFreeBytes}
+          totalBytes={metrics.pcDriveDTotalBytes}
+          smart={metrics.pcDriveDSmart}
+        />
+      </div>
+      <div className="panelFooter">
+        <span className={metrics.pcUp === 1 ? 'ok' : 'bad'}>{metrics.pcUp === 1 ? 'EXPORTER ONLINE' : 'EXPORTER DOWN'}</span>
+        <span>PORT 3 / 2.5Gb</span>
+      </div>
+    </Panel>
+  );
+}
+
+function ModelOps({ metrics, modelStatus }) {
+  const gpuMemUsedGb = formatGbFromBytes(metrics.pcGpuMemUsedBytes);
+  const gpuMemTotalGb = formatGbFromBytes(metrics.pcGpuMemTotalBytes);
+  const gpuMemPercent = metrics.pcGpuMemUsedBytes && metrics.pcGpuMemTotalBytes
+    ? (metrics.pcGpuMemUsedBytes / metrics.pcGpuMemTotalBytes) * 100
+    : null;
+  const modelOnline = modelStatus.state === 'online';
+
+  return (
+    <Panel title="LOCAL AI CORE" className="modelOps">
+      <div className="modelOpsGrid">
+        <div className={`modelState ${modelOnline ? 'online' : 'offline'}`}>
+          <span>MODEL</span>
+          <strong>{compactModelName(modelStatus.model)}</strong>
+          <em>{modelStatus.state.toUpperCase()}</em>
+        </div>
+        <Gauge
+          label="GPU LOAD"
+          value={metrics.pcGpu}
+          sublabel="RTX 4060 Ti"
+          color="#7da6d8"
+          compact
+        />
+        <Gauge
+          label="VRAM"
+          value={gpuMemPercent}
+          sublabel={`${gpuMemUsedGb} / ${gpuMemTotalGb}`}
+          color="#d9bf6f"
+          compact
+        />
+      </div>
+      <div className="modelMetaGrid">
+        <div>
+          <span>CONTEXT</span>
+          <strong>{modelStatus.contextTokens ? `${modelStatus.contextTokens.toLocaleString()} TOKENS` : 'WAITING'}</strong>
+        </div>
+        <div>
+          <span>PARAMETERS</span>
+          <strong>{formatCompactNumber(modelStatus.parameterCount)}</strong>
+        </div>
+        <div>
+          <span>ENDPOINT</span>
+          <strong>{modelStatus.endpoint || 'UNLINKED'}</strong>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function DriveBlock({ name, mount, used, freeBytes, totalBytes, smart }) {
+  const safeUsed = used == null ? null : clampPercent(used);
+  return (
+    <div className="driveBlock">
+      <div className="driveHead">
+        <span>{name}</span>
+        <strong className={smart === 0 ? 'bad' : smart === 1 ? 'ok' : ''}>{smartLabel(smart)}</strong>
+      </div>
+      <div className="driveMeta">
+        <em>{mount}</em>
+        <b>{safeUsed == null ? 'WAITING' : `${Math.round(safeUsed)}% USED`}</b>
+      </div>
+      <div className="miniBar driveUsage"><i style={{ width: `${safeUsed ?? 0}%` }} /></div>
+      <div className="driveStats">
+        <span>FREE {formatGbFromBytes(freeBytes)}</span>
+        <span>TOTAL {formatGbFromBytes(totalBytes)}</span>
+      </div>
+    </div>
+  );
+}
+
+function SwitchGraphic() {
+  const ports = Array.from({ length: 24 }, (_, index) => {
+    const live = [0, 1, 2, 22].includes(index);
+    return <span key={index} className={live ? 'port live' : 'port'} />;
+  });
+  return (
+    <div className="switchGraphic">
+      <div className="switchBrand">NETGEAR</div>
+      <div className="portRail">{ports}</div>
+      <div className="switchGlow" />
+      <div className="switchLegend">
+        <span>NETGEAR 10G SWITCH</span>
+      </div>
+      <div className="trafficArrows">
+        <span>DOWN 2.5Gb</span>
+        <span>LAN 10Gb</span>
+        <span>UP 1Gb</span>
+      </div>
+    </div>
+  );
+}
+
+function Network({ metrics }) {
+  return (
+    <Panel title="NETWORK MAP" className="network">
+      <div className="activePorts">ACTIVE PORTS | LINKING PORTS</div>
+      <SwitchGraphic />
+      <HardwareNetworkMap metrics={metrics} />
+      <div className="networkStats">
+        <div>
+          <span>WAN DOWN</span>
+          <strong>{metrics.wanDown?.toFixed?.(2) ?? '0.00'} Gb/s</strong>
+        </div>
+        <div>
+          <span>PC RECEIVE</span>
+          <strong>{metrics.pcNetIn?.toFixed?.(1) ?? '0.0'} Mb/s</strong>
+        </div>
+        <div>
+          <span>DIRECT LINK</span>
+          <strong className="direct-link-stat">{metrics.serverNetDirect?.toFixed?.(1) ?? '0.0'} Mb/s</strong>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function HardwareNetworkMap({ metrics }) {
+  const pcOnline = metrics.pcUp === 1;
+  const serverOnline = metrics.serverUp === 1;
+  const pcHealth = Math.max(clampPercent(metrics.pcCpu), clampPercent(metrics.pcRam), clampPercent(metrics.pcDrive));
+  const serverHealth = Math.max(clampPercent(metrics.serverCpu), clampPercent(metrics.serverRam), clampPercent(metrics.rootDisk));
+  const pcClass = pcHealth >= 85 ? 'danger' : pcHealth >= 60 ? 'warn' : 'good';
+  const serverClass = serverHealth >= 85 ? 'danger' : serverHealth >= 60 ? 'warn' : 'good';
+  const gatewayRate = `${metrics.wanDown?.toFixed?.(2) ?? '0.00'} Gb/s`;
+  return (
+    <div className="hardwareNetworkMapPanel">
+      <div className="hardwareTopology">
+        <svg className="hardwareLines" viewBox="0 0 560 154" preserveAspectRatio="none" aria-hidden="true">
+          <path className="staticLink good" d="M70 0 L70 58" />
+          <path className={`staticLink ${pcOnline ? pcClass : 'danger'}`} d="M210 0 L210 58" />
+          <path className="staticLink good" d="M350 0 L350 58" />
+          <path className={`staticLink ${serverOnline ? serverClass : 'danger'}`} d="M490 0 L490 58" />
+          <path className="flowLink good" d="M70 0 L70 58" />
+          <path className={`flowLink ${pcOnline ? pcClass : 'danger'}`} d="M210 0 L210 58" />
+          <path className="flowLink good" d="M350 0 L350 58" />
+          <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M490 0 L490 58" />
+        </svg>
+        <span className="topoPort gatewayPort">23</span>
+        <span className="topoPort pcPort">3</span>
+        <span className="topoPort meshPort">2</span>
+        <span className="topoPort serverPort">1</span>
+        <div className="topoDevice gatewayDevice">
+          <span>2.5Gb AT&amp;T Fiber Gateway</span>
+          <strong>Port 23 / Main In</strong>
+          <em>{gatewayRate} DOWN</em>
+        </div>
+        <div className={`topoDevice pcDevice ${pcOnline ? 'online' : 'offline'}`}>
+          <span>Main Workstation</span>
+          <strong>Port 3 / 2.5Gb</strong>
+          <em>CPU {Math.round(clampPercent(metrics.pcCpu))}% / RAM {Math.round(clampPercent(metrics.pcRam))}%</em>
+        </div>
+        <div className="topoDevice meshDevice">
+          <span>x25 Deco Mesh</span>
+          <strong>Port 2 / 1Gb</strong>
+          <em>Wireless Clients</em>
+        </div>
+        <div className={`topoDevice serverDevice ${serverOnline ? 'online' : 'offline'}`}>
+          <span>HP ProDesk Server</span>
+          <strong>Port 1 / 2.5Gb</strong>
+          <em>CPU {Math.round(clampPercent(metrics.serverCpu))}% / RAM {Math.round(clampPercent(metrics.serverRam))}%</em>
+        </div>
+      </div>
+      <div className="hardwarePortMap">
+        {[
+          ['23', 'AT&T Fiber Gateway', 'ACTIVE', formatPortRate(metrics.switchPort23Rx, metrics.switchPort23Tx)],
+          ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
+          ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
+          ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
+          ['DIRECT', 'Server ↔ PC', serverOnline && pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.serverNetDirect, metrics.pcNetDirect)],
+          ['4-22', 'Available', 'IDLE', '-']
+        ].map(([port, device, state, rate]) => (
+          <div className="hardwarePortRow" key={port}>
+            <strong>{port}</strong>
+            <span>{device}</span>
+            <em className={state === 'DOWN' ? 'down' : ''}>{state}</em>
+            <b>{rate}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Server({ metrics }) {
+  const serverOnline = Number(metrics.serverUp) === 1;
+  return (
+    <Panel title="HP ProDesk RAG SERVER (PROXMOX)" className="server">
+      <div className="serverGrid">
+        <div className={`statusOrb ${serverOnline ? 'online' : 'offline'}`}>
+          <span>NODE</span>
+          <strong>{serverOnline ? 'UP' : 'DOWN'}</strong>
+        </div>
+        <Gauge label="SERVER CPU" value={metrics.serverCpu} compact />
+        <Gauge label="RAM" value={metrics.serverRam} compact color="#7da6d8" />
+        <Gauge label="ROOT DISK" value={metrics.rootDisk} compact color="#7ac177" />
+      </div>
+      <div className="parseLine">
+        <span>PROXMOX EXPORTER STATUS:</span>
+        <strong>{serverOnline ? 'ONLINE' : 'OFFLINE'}</strong>
+      </div>
+      <div className="panelFooter">
+        <span className={serverOnline ? 'ok' : 'bad'}>{serverOnline ? 'NODE_EXPORTER ONLINE' : 'NODE_EXPORTER DOWN'}</span>
+        <span>PORT 1 / 2.5Gb</span>
+      </div>
+    </Panel>
+  );
+}
+
+function Storage({ metrics }) {
+  const root = clampPercent(metrics.rootDisk);
+  const data = metrics.dataDisk == null ? null : clampPercent(metrics.dataDisk);
+  return (
+    <Panel title="STORAGE AND HEALTH" className="storage">
+      <div className="healthBar">
+        <span>STORAGE SYSTEM HEALTH</span>
+        <div>
+          <i style={{ width: '98%' }} />
+        </div>
+        <strong>98% GOOD</strong>
+      </div>
+      <div className="storageGrid">
+        <div className="storageBlock">
+          <h3>SERVER ROOT</h3>
+          <p>(PROXMOX 256GB)</p>
+          <div className="miniBar"><i style={{ width: `${root}%` }} /></div>
+          <span>{Math.round(root)}% USED</span>
+        </div>
+        <div className="storageBlock future">
+          <h3>SERVER DATA</h3>
+          <p>(2TB WD-BLACK)</p>
+          <div className="miniBar"><i style={{ width: `${data ?? 0}%` }} /></div>
+          <span>{data == null ? 'WAITING FOR /data' : `${Math.round(data)}% USED`}</span>
+        </div>
+        <div className="storageBlock">
+          <h3>MAIN PC C:</h3>
+          <p>(1TB NVME)</p>
+          <div className="miniBar"><i style={{ width: `${clampPercent(metrics.pcDrive)}%` }} /></div>
+          <span>{Math.round(clampPercent(metrics.pcDrive))}% USED</span>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function Services({ metrics }) {
+  const pcOnline = metrics.pcUp === 1;
+  const serverOnline = metrics.serverUp === 1;
+  const services = [
+    ['PROMETHEUS', 'ONLINE'],
+    ['MAV-CONSOLE', 'ONLINE'],
+    ['MAIN PC', pcOnline ? 'ONLINE' : 'DOWN'],
+    ['PROXMOX', serverOnline ? 'ONLINE' : 'DOWN'],
+    ['LOCAL MODEL', 'TRACKED']
+  ];
+  return (
+    <Panel title="SERVICE MAP" className="services">
+      <div className="serviceList">
+        {services.map(([name, state]) => (
+          <div className="serviceRow" key={name}>
+            <span className={state === 'DOWN' ? 'led red' : 'led'} />
+            <strong>{name}</strong>
+            <em>{state}</em>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function NetworkMapPage({ metrics }) {
+  const pcOnline = metrics.pcUp === 1;
+  const serverOnline = metrics.serverUp === 1;
+  const pcHealth = Math.max(clampPercent(metrics.pcCpu), clampPercent(metrics.pcRam), clampPercent(metrics.pcDrive));
+  const serverHealth = Math.max(clampPercent(metrics.serverCpu), clampPercent(metrics.serverRam), clampPercent(metrics.rootDisk));
+  const pcClass = pcHealth >= 85 ? 'danger' : pcHealth >= 60 ? 'warn' : 'good';
+  const serverClass = serverHealth >= 85 ? 'danger' : serverHealth >= 60 ? 'warn' : 'good';
+  const gatewayClass = metrics.wanDown > 0 || metrics.wanUp > 0 ? 'good' : 'good';
+  const meshClass = 'good';
+  return (
+    <div className="mapPage">
+      <Panel title="LIVE NETWORK MAP" className="mapPanel">
+        <div className="topologyCanvas">
+          <div className="mapNode isp">
+            <span>2.5Gb AT&T Fiber</span>
+            <strong>ISP LINK</strong>
+          </div>
+          <div className="mapNode internet">
+            <span>Internet</span>
+            <strong>WAN</strong>
+          </div>
+          <div className="mapNode router">
+            <span>Gateway Router</span>
+            <strong>{metrics.wanDown?.toFixed?.(2) ?? '0.00'} Gb/s DOWN</strong>
+          </div>
+          <div className="mapNode switch">
+            <span>10Gb Network Switch</span>
+            <strong>24 PORT</strong>
+            <div className="mapPorts">
+              {Array.from({ length: 24 }, (_, index) => (
+                <i
+                  key={index}
+                  className={[
+                    index === 22 ? `hot ${gatewayClass}` : '',
+                    index === 0 ? `hot ${serverOnline ? serverClass : 'danger'}` : '',
+                    index === 1 ? `hot ${meshClass}` : '',
+                    index === 2 ? `hot ${pcOnline ? pcClass : 'danger'}` : ''
+                  ].filter(Boolean).join(' ')}
+                />
+              ))}
+            </div>
+            <span className={`portAnchor port1 ${serverOnline ? serverClass : 'danger'}`} title="Port 1" />
+            <span className={`portAnchor port2 ${meshClass}`} title="Port 2" />
+            <span className={`portAnchor port3 ${pcOnline ? pcClass : 'danger'}`} title="Port 3" />
+            <span className={`portAnchor port23 ${gatewayClass}`} title="Port 23" />
+          </div>
+          <div className={`mapNode workstationNode ${pcOnline ? 'online' : 'offline'}`}>
+            <span>Main Workstation</span>
+            <strong>Port 3 / 2.5Gb</strong>
+            <em>CPU {Math.round(clampPercent(metrics.pcCpu))}% / RAM {Math.round(clampPercent(metrics.pcRam))}%</em>
+          </div>
+          <div className={`mapNode serverNode ${serverOnline ? 'online' : 'offline'}`}>
+            <span>HP ProDesk Server</span>
+            <strong>Port 1 / 2.5Gb</strong>
+            <em>CPU {Math.round(clampPercent(metrics.serverCpu))}% / RAM {Math.round(clampPercent(metrics.serverRam))}%</em>
+          </div>
+          <div className="mapNode meshNode">
+            <span>x25 Deco Mesh</span>
+            <strong>Port 2 / 1Gb</strong>
+            <em>Wireless Clients</em>
+          </div>
+
+          <svg className="mapLines" viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="linkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#dce6ef" />
+                <stop offset="100%" stopColor="#6aa7d9" />
+              </linearGradient>
+            </defs>
+            <path className={`staticLink ${gatewayClass}`} d="M500 62 L500 105" />
+            <path className={`staticLink ${gatewayClass}`} d="M500 150 L500 205" />
+            <path className={`staticLink ${gatewayClass}`} d="M500 220 L500 238" />
+            <path className={`staticLink ${pcOnline ? pcClass : 'danger'}`} d="M393 346 L393 386 L205 386 L205 410" />
+            <path className={`staticLink ${meshClass}`} d="M500 346 L500 438" />
+            <path className={`staticLink ${serverOnline ? serverClass : 'danger'}`} d="M607 346 L607 386 L795 386 L795 410" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 62 L500 105" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 150 L500 205" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 220 L500 238" />
+            <path className={`flowLink ${pcOnline ? pcClass : 'danger'}`} d="M393 346 L393 386 L205 386 L205 410" />
+            <path className={`flowLink ${meshClass}`} d="M500 346 L500 438" />
+            <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M607 346 L607 386 L795 386 L795 410" />
+            <path className={`staticLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 410 L795 410" />
+            <path className={`flowLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 410 L795 410" />
+          </svg>
+        </div>
+      </Panel>
+      <Panel title="PORT MAP" className="portPanel">
+        <div className="portRows">
+          {[
+            ['23', 'Gateway Router', 'ACTIVE', formatPortRate(metrics.switchPort23Rx, metrics.switchPort23Tx)],
+            ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
+            ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
+            ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
+            ['DIRECT', 'Server ↔ PC', serverOnline && pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.serverNetDirect, metrics.pcNetDirect)],
+            ['4-22', 'Available', 'IDLE', '-']
+          ].map(([port, device, state, rate]) => (
+            <div className="portRow" key={port}>
+              <strong>{port}</strong>
+              <span>{device}</span>
+              <em className={state === 'DOWN' ? 'down' : ''}>{state}</em>
+              <b>{rate}</b>
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function App() {
+  const modelStatus = useModelStatus();
+  const { metrics, status } = useMetrics();
+  const [view, setView] = useState('hardware');
+  return (
+    <DashboardViewContext.Provider value={[view, setView]}>
+      <main className="dashboard">
+        <TopBar status={status} modelStatus={modelStatus} />
+        {view === 'hardware' ? (
+          <div className="mainGrid">
+            <Workstation metrics={metrics} />
+            <ModelOps metrics={metrics} modelStatus={modelStatus} />
+            <Network metrics={metrics} />
+            <Server metrics={metrics} />
+            <Storage metrics={metrics} />
+            <Services metrics={metrics} />
+          </div>
+        ) : (
+          <NetworkMapPage metrics={metrics} />
+        )}
+        {status.error ? <div className="errorStrip">{status.error}</div> : null}
+      </main>
+    </DashboardViewContext.Provider>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);

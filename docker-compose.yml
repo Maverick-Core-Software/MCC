@@ -1,0 +1,42 @@
+services:
+  mav-console-dashboard:
+    build: .
+    container_name: mav-console-dashboard
+    restart: unless-stopped
+    environment:
+      PROMETHEUS_URL: http://192.168.1.12:9090
+      LLAMA_SERVER_URL: http://192.168.1.10:8080
+      PORT: 3010
+    ports:
+      - "3010:3010"
+
+  prometheus:
+    build:
+      context: .
+      dockerfile: prometheus.Dockerfile
+    container_name: prometheus
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - prometheus_data:/prometheus
+
+
+  bgw-exporter:
+    build: ./bgw-exporter
+    container_name: bgw-exporter
+    restart: unless-stopped
+    network_mode: host
+    ports:
+      - "9085:9085"
+
+
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    container_name: snmp-exporter
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./snmp.yml:/etc/snmp_exporter/snmp.yml
+
+volumes:
+  prometheus_data:

@@ -1,0 +1,1353 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@500;600;700;800;900&display=swap');
+
+:root {
+  color-scheme: dark;
+  --bg: #090a0f;
+  --panel: #1a1b23;
+  --panel-deep: #14151c;
+  --panel-hi: #20222c;
+  --text: #e7e8ec;
+  --muted: #8d94a1;
+  --line: rgba(255, 255, 255, 0.08);
+  --green: #75bf72;
+  --yellow: #d9bf6f;
+  --red: #c75050;
+  --blue: #6b9ed8;
+  --cyan: #66d4ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(95, 115, 150, 0.12), transparent 34rem),
+    linear-gradient(180deg, #101118 0%, var(--bg) 42%, #050609 100%);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+.dashboard {
+  width: min(1180px, 100vw);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 14px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 34px, 34px 100%;
+}
+
+.topBar {
+  height: 52px;
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  margin-bottom: 8px;
+  background: linear-gradient(180deg, #1e2029, #13141b);
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.75);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.brandMark {
+  font-size: 22px;
+  font-weight: 800;
+  color: #f5f7fb;
+  text-shadow: 0 0 16px rgba(112, 173, 255, .18);
+}
+
+.clockBlock {
+  text-align: center;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.clockBlock div {
+  font-size: 22px;
+}
+
+.clockBlock span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.agentStatus {
+  justify-self: end;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.viewToggle {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: #0d0f15;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.viewToggle button {
+  border: 0;
+  border-radius: 3px;
+  padding: 5px 12px;
+  background: transparent;
+  color: var(--muted);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.viewToggle button.active {
+  color: #081015;
+  background: linear-gradient(180deg, #9ccf86, #5f9f64);
+}
+
+.agentStatus strong {
+  color: var(--green);
+}
+
+.agentStatus span {
+  color: var(--green);
+}
+
+.agentStatus em {
+  color: #444a56;
+  font-style: normal;
+  padding: 0 6px;
+}
+
+.agentStatus.offline strong,
+.agentStatus.offline span {
+  color: var(--red);
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: minmax(78px, auto);
+  gap: 8px;
+  align-items: start;
+}
+
+.panel {
+  position: relative;
+  min-height: 0;
+  padding: 10px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0)),
+    var(--panel);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 -1px 0 rgba(0,0,0,.75),
+    0 12px 24px rgba(0,0,0,.18);
+  overflow: hidden;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 5px, rgba(255,255,255,.018) 6px);
+  mix-blend-mode: screen;
+}
+
+.panelTitle {
+  position: relative;
+  z-index: 1;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  color: #f0f2f4;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  text-shadow: 0 1px 0 #000;
+}
+
+.network > .panelTitle {
+  text-align: center;
+}
+
+.panelFooter {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 7px;
+  color: var(--muted);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.panelFooter .ok {
+  color: var(--green);
+}
+
+.panelFooter .bad {
+  color: var(--red);
+}
+
+.workstation {
+  grid-column: span 6;
+  min-height: 252px;
+}
+
+.modelOps {
+  grid-column: span 6;
+  min-height: 252px;
+}
+
+.network {
+  grid-column: span 6;
+  grid-row: span 2;
+  min-height: 535px;
+}
+
+.hardwareNetworkMapPanel {
+  position: relative;
+  z-index: 1;
+  margin-top: 10px;
+}
+
+.server {
+  grid-column: span 6;
+  min-height: 205px;
+}
+
+.services {
+  grid-column: span 12;
+  min-height: 74px;
+}
+
+.storage {
+  grid-column: span 6;
+  min-height: 205px;
+}
+
+.gaugeRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: start;
+  gap: 6px;
+}
+
+.pcGaugeRow {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.gaugeShell {
+  position: relative;
+  min-height: 148px;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+}
+
+.gaugeShell::before {
+  content: "";
+  position: absolute;
+  top: 24px;
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255,255,255,.035), transparent 62%);
+  pointer-events: none;
+}
+
+.gaugeChart {
+  width: 100%;
+  height: 100px;
+}
+
+.gaugeValue {
+  margin-top: -16px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: .9;
+  text-shadow: 0 2px 0 rgba(0,0,0,.55);
+}
+
+.gaugeLabel {
+  margin-top: 4px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .05em;
+}
+
+.gaugeSub {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.deviceDetails {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin-top: 8px;
+  color: #afb4be;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.deviceDetails div {
+  min-height: 34px;
+  padding: 7px;
+  background: #11131a;
+  border-radius: 3px;
+}
+
+.hardwareSpecStrip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin-top: 6px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.hardwareSpecStrip div {
+  min-height: 34px;
+  padding: 6px 7px;
+  background: #11131a;
+  border-radius: 3px;
+}
+
+.hardwareSpecStrip span,
+.hardwareSpecStrip strong {
+  display: block;
+  line-height: 1;
+}
+
+.hardwareSpecStrip span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.hardwareSpecStrip strong {
+  margin-top: 4px;
+  color: #f0f2f4;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.driveGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.modelOpsGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.modelState {
+  min-height: 144px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,0)),
+    #11131a;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(117,191,114,.18);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.modelState.offline {
+  box-shadow: inset 0 0 0 1px rgba(199,80,80,.28);
+}
+
+.modelState span,
+.modelState strong,
+.modelState em,
+.modelMetaGrid span,
+.modelMetaGrid strong {
+  display: block;
+  line-height: 1;
+}
+
+.modelState span,
+.modelMetaGrid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.modelState strong {
+  color: #f0f2f4;
+  font-size: 26px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.modelState em {
+  color: var(--green);
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.modelState.offline em {
+  color: var(--red);
+}
+
+.modelMetaGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: .8fr .7fr 1.5fr;
+  gap: 6px;
+  margin-top: 8px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.modelMetaGrid div {
+  min-width: 0;
+  min-height: 46px;
+  padding: 8px;
+  background: #11131a;
+  border-radius: 3px;
+}
+
+.modelMetaGrid strong {
+  margin-top: 6px;
+  overflow: hidden;
+  color: #f0f2f4;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driveBlock {
+  min-height: 86px;
+  padding: 8px;
+  background: #11131a;
+  border-radius: 3px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.driveHead,
+.driveMeta,
+.driveStats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.driveHead span {
+  color: #f0f2f4;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.driveHead strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.driveHead strong.ok {
+  color: var(--green);
+}
+
+.driveHead strong.bad {
+  color: var(--red);
+}
+
+.driveMeta {
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.driveMeta em,
+.driveMeta b,
+.driveStats span {
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.driveMeta b {
+  color: #9fb5ce;
+}
+
+.driveUsage {
+  height: 12px;
+  margin: 7px 0;
+}
+
+.driveStats {
+  color: #aeb6c2;
+}
+
+.activePorts {
+  color: #d3d5d9;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.switchGraphic {
+  position: relative;
+  width: 84%;
+  margin: 8px auto 0;
+  padding: 12px;
+  background: linear-gradient(180deg, #2a2c38, #161821);
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.04), 0 14px 20px rgba(0,0,0,.25);
+}
+
+.switchGlow {
+  position: absolute;
+  inset: 10px;
+  pointer-events: none;
+  border-radius: 4px;
+  background: radial-gradient(circle at 20% 20%, rgba(117,191,114,.13), transparent 34%);
+}
+
+.switchBrand {
+  font-size: 10px;
+  color: #d7dae0;
+  margin-bottom: 8px;
+}
+
+.portRail {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+}
+
+.port {
+  height: 14px;
+  border-radius: 2px;
+  background: #4b505e;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.35);
+}
+
+.port.live {
+  background: linear-gradient(180deg, #a5da77, #5e8e48);
+  box-shadow: 0 0 8px rgba(117,191,114,.45), inset 0 -2px 0 rgba(0,0,0,.35);
+}
+
+.switchLegend,
+.trafficArrows {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #aeb4c1;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.trafficArrows {
+  justify-content: space-between;
+  color: #76a7d9;
+  font-size: 15px;
+}
+
+.networkStats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.networkStats div {
+  background: #11131a;
+  border-radius: 3px;
+  padding: 8px 10px;
+}
+
+.networkStats span,
+.networkStats strong {
+  display: block;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.networkStats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.networkStats strong {
+  color: var(--blue);
+  font-size: 24px;
+}
+
+.hardwareTopology {
+  position: relative;
+  z-index: 1;
+  height: 146px;
+  margin-top: 8px;
+  border-radius: 4px;
+  background:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+    #0e1017;
+  background-size: 28px 28px;
+  overflow: hidden;
+}
+
+.hardwareLines {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.hardwareLines path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hardwareLines .staticLink {
+  stroke: rgba(117,191,114,.5);
+  stroke-width: 6;
+  filter: drop-shadow(0 0 8px rgba(117,191,114,.22));
+}
+
+.hardwareLines .flowLink {
+  stroke: var(--green);
+  stroke-width: 3;
+  stroke-dasharray: 12 16;
+  animation: linkFlow 2.4s linear infinite;
+}
+
+.hardwareLines .staticLink.warn { stroke: rgba(217,191,111,.62); }
+.hardwareLines .staticLink.danger { stroke: rgba(199,80,80,.68); }
+.hardwareLines .flowLink.warn { stroke: var(--yellow); }
+.hardwareLines .flowLink.danger { stroke: var(--red); }
+
+.topoPort {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #0b0d12;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #a9df7d, #659a51);
+  color: #07100a;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 0 12px rgba(117,191,114,.7);
+}
+
+.topoPort.gatewayPort { left: calc(12.5% - 10px); top: -1px; }
+.topoPort.pcPort { left: calc(37.5% - 10px); top: -1px; }
+.topoPort.meshPort { left: calc(62.5% - 10px); top: -1px; }
+.topoPort.serverPort { left: calc(87.5% - 10px); top: -1px; }
+
+.topoDevice {
+  position: absolute;
+  z-index: 2;
+  top: 56px;
+  width: calc(25% - 9px);
+  min-height: 70px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px 8px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,0)),
+    #151720;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.08),
+    inset 0 -1px 0 rgba(0,0,0,.72),
+    0 0 0 1px rgba(117,191,114,.14);
+}
+
+.topoDevice.gatewayDevice {
+  left: 0;
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.1),
+    0 0 0 1px rgba(102,212,255,.24),
+    0 0 20px rgba(102,212,255,.14);
+}
+
+.topoDevice.pcDevice { left: calc(25% + 3px); }
+.topoDevice.meshDevice { left: calc(50% + 3px); }
+.topoDevice.serverDevice { right: 0; }
+
+.topoDevice span,
+.topoDevice strong,
+.topoDevice em {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.topoDevice span {
+  color: #f0f2f4;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.topoDevice strong {
+  color: var(--blue);
+  font-size: 14px;
+}
+
+.topoDevice em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.gatewayDevice strong,
+.gatewayDevice em {
+  color: var(--cyan);
+}
+
+.hardwarePortMap {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.hardwarePortRow {
+  display: grid;
+  grid-template-columns: 38px 1fr 42px 78px;
+  gap: 6px;
+  align-items: center;
+  min-height: 36px;
+  padding: 5px 6px;
+  background: #11131a;
+  border-radius: 3px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.hardwarePortRow strong {
+  display: grid;
+  place-content: center;
+  min-height: 26px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #89c76e, #54824b);
+  color: #07100a;
+  font-size: 16px;
+}
+
+.hardwarePortRow span {
+  color: #f0f2f4;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.hardwarePortRow em,
+.hardwarePortRow b {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.hardwarePortRow em.down {
+  color: var(--red);
+}
+
+.hardwarePortRow b {
+  color: #9fb5ce;
+  text-align: right;
+}
+
+.serverGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.statusOrb {
+  position: relative;
+  min-height: 132px;
+  margin-top: 4px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at center, #2b3134 0 38%, transparent 40%),
+    conic-gradient(var(--green), #2b3036 72%, var(--green));
+}
+
+.statusOrb.offline {
+  background:
+    radial-gradient(circle at center, #30282b 0 38%, transparent 40%),
+    conic-gradient(var(--red), #2b3036 72%, var(--red));
+}
+
+.statusOrb span,
+.statusOrb strong {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  display: block;
+}
+
+.statusOrb span {
+  color: #e4e6eb;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.statusOrb strong {
+  color: var(--green);
+  font-size: 18px;
+}
+
+.parseLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.parseLine strong {
+  color: var(--green);
+}
+
+.serviceList {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.serviceRow {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  background: #11131a;
+  border-radius: 3px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.serviceRow strong {
+  font-size: 15px;
+}
+
+.serviceRow em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+}
+
+.led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green);
+}
+
+.led.red {
+  background: var(--red);
+  box-shadow: 0 0 10px var(--red);
+}
+
+.healthBar {
+  display: grid;
+  grid-template-columns: 190px 1fr 80px;
+  gap: 10px;
+  align-items: center;
+  margin: 6px 0 14px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.healthBar span,
+.healthBar strong {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.healthBar strong {
+  color: #aac7a4;
+}
+
+.healthBar div,
+.miniBar {
+  height: 18px;
+  background: #2a2e37;
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+}
+
+.healthBar i,
+.miniBar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6ba76d, #91c985);
+}
+
+.storageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.storageBlock {
+  min-height: 105px;
+  padding: 10px;
+  background: #11131a;
+  border-radius: 3px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.storageBlock h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.storageBlock p {
+  margin: 3px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.storageBlock span {
+  display: block;
+  margin-top: 7px;
+  color: #aeb6c2;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.storageBlock.future .miniBar i {
+  background: #4b5260;
+}
+
+.errorStrip {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(199, 80, 80, .16);
+  color: #ffb4b4;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .topBar {
+    grid-template-columns: 1fr;
+    height: auto;
+    text-align: center;
+    padding: 10px;
+  }
+
+  .agentStatus {
+    justify-self: center;
+  }
+
+  .workstation,
+  .modelOps,
+  .network,
+  .server,
+  .services,
+  .storage {
+    grid-column: 1 / -1;
+  }
+
+  .gaugeRow,
+  .serverGrid,
+  .modelOpsGrid,
+  .modelMetaGrid,
+  .storageGrid,
+  .deviceDetails {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .healthBar {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mapPage {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 8px;
+}
+
+.mapPanel {
+  min-height: 660px;
+}
+
+.portPanel {
+  min-height: 660px;
+}
+
+.topologyCanvas {
+  position: relative;
+  height: 590px;
+  margin-top: 8px;
+  border-radius: 5px;
+  background:
+    radial-gradient(circle at center, rgba(102, 212, 255, .08), transparent 22rem),
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px),
+    #0d0f15;
+  background-size: auto, 36px 36px, 36px 36px, auto;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.045);
+}
+
+.mapLines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.mapLines path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mapLines .staticLink {
+  stroke: rgba(230, 238, 247, .54);
+  stroke-width: 6;
+  filter: drop-shadow(0 0 8px rgba(88, 166, 255, .16));
+}
+
+.mapLines .flowLink {
+  stroke: #75bf72;
+  stroke-width: 3;
+  stroke-dasharray: 12 18;
+  animation: linkFlow 2.4s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(102, 212, 255, .34));
+}
+
+.mapLines .staticLink.good { stroke: rgba(117,191,114,.58); }
+.mapLines .staticLink.warn { stroke: rgba(217,191,111,.66); }
+.mapLines .staticLink.danger { stroke: rgba(199,80,80,.72); }
+.mapLines .flowLink.good { stroke: var(--green); }
+.mapLines .flowLink.warn { stroke: var(--yellow); }
+.mapLines .flowLink.danger { stroke: var(--red); }
+
+@keyframes linkFlow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -60; }
+}
+
+.mapNode {
+  position: absolute;
+  z-index: 2;
+  width: 210px;
+  min-height: 82px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 3px;
+  padding: 12px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,0)),
+    #151720;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.08),
+    inset 0 -1px 0 rgba(0,0,0,.72),
+    0 16px 30px rgba(0,0,0,.28);
+}
+
+.mapNode::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 22px rgba(117,191,114,.06);
+  pointer-events: none;
+}
+
+.mapNode span,
+.mapNode strong,
+.mapNode em {
+  position: relative;
+  z-index: 1;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.mapNode span {
+  color: #f2f4f7;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 #000;
+}
+
+.mapNode strong {
+  color: var(--blue);
+  font-size: 16px;
+}
+
+.mapNode em {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.mapNode.online {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 0 0 1px rgba(117,191,114,.2), 0 16px 30px rgba(0,0,0,.28);
+}
+
+.mapNode.offline {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 0 0 1px rgba(199,80,80,.35), 0 16px 30px rgba(0,0,0,.28);
+}
+
+.isp { left: calc(50% - 105px); top: 8px; }
+.internet { left: calc(50% - 105px); top: 76px; min-height: 64px; }
+.router { left: calc(50% - 105px); top: 152px; min-height: 70px; }
+.switch { left: calc(50% - 170px); top: 250px; width: 340px; min-height: 116px; }
+.workstationNode { left: 60px; top: 410px; }
+.serverNode { right: 60px; top: 410px; }
+.meshNode { left: calc(50% - 105px); bottom: 28px; }
+
+.mapPorts {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  width: 260px;
+  margin-top: 8px;
+}
+
+.mapPorts i {
+  height: 12px;
+  border-radius: 2px;
+  background: #505663;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.4);
+}
+
+.mapPorts i.hot {
+  background: linear-gradient(180deg, #aadf7d, #669950);
+  box-shadow: 0 0 8px rgba(117,191,114,.45), inset 0 -2px 0 rgba(0,0,0,.4);
+}
+
+.mapPorts i.hot.good {
+  background: linear-gradient(180deg, #aadf7d, #669950);
+  box-shadow: 0 0 8px rgba(117,191,114,.45), inset 0 -2px 0 rgba(0,0,0,.4);
+}
+
+.mapPorts i.hot.warn {
+  background: linear-gradient(180deg, #f2d87d, #9d8440);
+  box-shadow: 0 0 8px rgba(217,191,111,.5), inset 0 -2px 0 rgba(0,0,0,.4);
+}
+
+.mapPorts i.hot.danger {
+  background: linear-gradient(180deg, #e17872, #94413f);
+  box-shadow: 0 0 8px rgba(199,80,80,.55), inset 0 -2px 0 rgba(0,0,0,.4);
+}
+
+.mapNode .portAnchor {
+  position: absolute;
+  z-index: 4;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #0b0d12;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 12px rgba(117,191,114,.72);
+  pointer-events: none;
+}
+
+.mapNode .portAnchor.warn {
+  background: var(--yellow);
+  box-shadow: 0 0 12px rgba(217,191,111,.72);
+}
+
+.mapNode .portAnchor.danger {
+  background: var(--red);
+  box-shadow: 0 0 12px rgba(199,80,80,.72);
+}
+
+.mapNode .portAnchor.port23 {
+  left: 164px;
+  top: -7px;
+}
+
+.mapNode .portAnchor.port3 {
+  left: 81px;
+  bottom: -7px;
+}
+
+.mapNode .portAnchor.port2 {
+  left: 164px;
+  bottom: -7px;
+}
+
+.mapNode .portAnchor.port1 {
+  right: 81px;
+  bottom: -7px;
+}
+
+.portRows {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.portRow {
+  display: grid;
+  grid-template-columns: 54px minmax(82px, 1fr) 50px 104px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px;
+  background: #11131a;
+  border-radius: 3px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.portRow strong {
+  display: grid;
+  place-content: center;
+  min-height: 30px;
+  background: linear-gradient(180deg, #89c76e, #54824b);
+  color: #07100a;
+  border-radius: 3px;
+  font-size: 18px;
+}
+
+.portRow span {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.portRow em,
+.portRow b {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+}
+
+.portRow b {
+  color: #9fb5ce;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.portRow em.down {
+  color: var(--red);
+}
+
+@media (max-width: 980px) {
+  .mapPage {
+    grid-template-columns: 1fr;
+  }
+
+  .mapPanel,
+  .portPanel {
+    min-height: auto;
+  }
+
+  .topologyCanvas {
+    height: 720px;
+  }
+
+  .workstationNode,
+  .serverNode,
+  .meshNode,
+  .switch,
+  .router,
+  .internet,
+  .isp {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .workstationNode { top: 420px; }
+  .serverNode { top: 520px; }
+  .meshNode { bottom: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mapLines .flowLink {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .dashboard {
+    padding: 8px;
+  }
+
+  .gaugeRow,
+  .serverGrid,
+  .storageGrid,
+  .deviceDetails,
+  .networkStats {
+    grid-template-columns: 1fr;
+  }
+
+  .switchGraphic {
+    width: 100%;
+  }
+}
