@@ -48,3 +48,31 @@ export async function queryModelStatus() {
   if (!response.ok) throw new Error(`Model status failed: ${response.status}`);
   return response.json();
 }
+
+export async function queryOrchestratorStatus() {
+  const response = await fetch('/api/orchestrator/status', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Orchestrator status failed: ${response.status}`);
+  return response.json();
+}
+
+export async function createOrchestratorPlan(idea) {
+  const response = await fetch('/api/orchestrator/plan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ idea })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Plan failed: ${response.status}`);
+  return payload;
+}
+
+export async function createLocalWorkerBrief(idea, task) {
+  const response = await fetch('/api/orchestrator/local-brief', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ idea, task })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `Worker brief failed: ${response.status}`);
+  return payload;
+}

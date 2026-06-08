@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as echarts from 'echarts';
-import { useMetrics, useModelStatus } from './hooks/useMetrics.js';
+import { useMetrics, useModelStatus, useOrchestratorStatus } from './hooks/useMetrics.js';
+import { createLocalWorkerBrief, createOrchestratorPlan } from './lib/api.js';
 import {
   clampPercent,
   colorFor,
@@ -130,6 +131,7 @@ function TopBar({ status, modelStatus }) {
       <nav className="viewToggle" aria-label="Dashboard view">
         <button className={view === 'hardware' ? 'active' : ''} onClick={() => setView('hardware')}>Hardware</button>
         <button className={view === 'network' ? 'active' : ''} onClick={() => setView('network')}>Network Map</button>
+        <button className={view === 'orchestrator' ? 'active' : ''} onClick={() => setView('orchestrator')}>Orchestrator</button>
       </nav>
       <div className={`agentStatus ${modelStatus.state === 'online' ? 'online' : 'offline'}`}>
         LOCAL MODEL: <strong>{compactModelName(modelStatus.model)}</strong>
@@ -590,6 +592,129 @@ function NetworkMapPage({ metrics }) {
   );
 }
 
+function workerLabel(workerId) {
+  const labels = {
+    'local-qwen': 'LOCAL QWEN',
+    'codex-review': 'CODEX REVIEW',
+    'claude-cli': 'CLAUDE CLI',
+    'rag-server': 'RAG SERVER'
+  };
+  return labels[workerId] || workerId?.toUpperCase?.() || 'UNROUTED';
+}
+
+function OrchestratorPage({ modelStatus }) {
+  const orchestratorStatus = useOrchestratorStatus();
+  const [idea, setIdea] = useState('Build an app with my standard tech stack that tells me where the closest ice cream shop is when it is 100 degrees outside.');
+  const [activeRun, setActiveRun] = useState(null);
+  const [workerBrief, setWorkerBrief] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [briefBusyId, setBriefBusyId] = useState(null);
+  const [error, setError] = useState(null);
+  const run = activeRun || orchestratorStatus.runs?.[0] || null;
+
+  async function handlePlan(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setWorkerBrief(null);
+    try {
+      const next = await createOrchestratorPlan(idea);
+      setActiveRun(next);
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleBrief(task) {
+    setBriefBusyId(task.id);
+    setError(null);
+    try {
+      const next = await createLocalWorkerBrief(run.idea, task);
+      setWorkerBrief({ task, ...next });
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setBriefBusyId(null);
+    }
+  }
+
+  return (
+    <div className="orchestratorPage">
+      <Panel title="AI ORCHESTRATOR V1" className="orchestratorCommand">
+        <form onSubmit={handlePlan}>
+          <textarea
+            value={idea}
+            onChange={(event) => setIdea(event.target.value)}
+            aria-label="Product idea"
+          />
+          <div className="orchestratorActions">
+            <button type="submit" disabled={busy || modelStatus.state !== 'online'}>
+              {busy ? 'Planning...' : 'Create Plan'}
+            </button>
+            <span>{modelStatus.state === 'online' ? `Lead worker online: ${compactModelName(modelStatus.model)}` : 'Local model offline'}</span>
+          </div>
+        </form>
+      </Panel>
+
+      <Panel title="WORKER ROUTER" className="workerRouter">
+        <div className="workerGrid">
+          {orchestratorStatus.workers.map((worker) => (
+            <div className="workerCard" key={worker.id}>
+              <span>{workerLabel(worker.id)}</span>
+              <strong>{worker.role}</strong>
+              <em>{worker.cost} / {worker.state}</em>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="IMPLEMENTATION PLAN" className="planPanel">
+        {run ? (
+          <>
+            <div className="planSummary">{run.plan.summary}</div>
+            <div className="taskList">
+              {run.plan.tasks.map((task) => (
+                <div className="taskRow" key={task.id}>
+                  <strong>{task.title}</strong>
+                  <span>{workerLabel(task.worker)}</span>
+                  <em>{task.reason}</em>
+                  <button
+                    type="button"
+                    disabled={task.worker !== 'local-qwen' || briefBusyId === task.id}
+                    onClick={() => handleBrief(task)}
+                  >
+                    {briefBusyId === task.id ? 'Briefing...' : 'Brief'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="verifyRail">
+              {run.plan.verification.map((step) => <span key={step}>{step}</span>)}
+            </div>
+          </>
+        ) : (
+          <div className="emptyPlan">No run yet. Create a plan to route work across local and hosted workers.</div>
+        )}
+      </Panel>
+
+      <Panel title="LOCAL WORKER BRIEF" className="briefPanel">
+        {workerBrief ? (
+          <>
+            <div className="briefTask">{workerBrief.task.title}</div>
+            <pre>{workerBrief.brief}</pre>
+          </>
+        ) : (
+          <div className="emptyPlan">Select a local Qwen task brief after planning.</div>
+        )}
+      </Panel>
+
+      {(error || orchestratorStatus.error) ? <div className="errorStrip">{error || orchestratorStatus.error}</div> : null}
+    </div>
+  );
+}
+
 function App() {
   const modelStatus = useModelStatus();
   const { metrics, status } = useMetrics();
@@ -607,8 +732,10 @@ function App() {
             <Storage metrics={metrics} />
             <Services metrics={metrics} />
           </div>
-        ) : (
+        ) : view === 'network' ? (
           <NetworkMapPage metrics={metrics} />
+        ) : (
+          <OrchestratorPage modelStatus={modelStatus} />
         )}
         {status.error ? <div className="errorStrip">{status.error}</div> : null}
       </main>

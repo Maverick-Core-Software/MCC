@@ -104,7 +104,7 @@ body {
 .viewToggle button {
   border: 0;
   border-radius: 3px;
-  padding: 5px 12px;
+  padding: 5px 10px;
   background: transparent;
   color: var(--muted);
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -137,6 +137,258 @@ body {
 .agentStatus.offline strong,
 .agentStatus.offline span {
   color: var(--red);
+}
+
+.orchestratorPage {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 8px;
+}
+
+.orchestratorCommand {
+  grid-column: span 7;
+  min-height: 214px;
+}
+
+.orchestratorCommand form,
+.orchestratorCommand textarea,
+.orchestratorActions {
+  position: relative;
+  z-index: 1;
+}
+
+.orchestratorCommand textarea {
+  width: 100%;
+  min-height: 118px;
+  resize: vertical;
+  border: 0;
+  border-radius: 4px;
+  padding: 12px;
+  background: #0f1118;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  font: 700 15px/1.45 Inter, system-ui, sans-serif;
+}
+
+.orchestratorCommand textarea:focus {
+  outline: 2px solid rgba(107,158,216,.65);
+  outline-offset: 1px;
+}
+
+.orchestratorActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.orchestratorActions button,
+.taskRow button {
+  border: 0;
+  border-radius: 3px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #9ccf86, #5f9f64);
+  color: #07100a;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.orchestratorActions button:disabled,
+.taskRow button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.orchestratorActions span {
+  color: var(--muted);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workerRouter {
+  grid-column: span 5;
+  min-height: 214px;
+}
+
+.workerGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workerCard {
+  min-height: 78px;
+  padding: 10px;
+  background: #11131a;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.workerCard span,
+.workerCard strong,
+.workerCard em {
+  display: block;
+  line-height: 1.05;
+}
+
+.workerCard span {
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.workerCard strong {
+  margin-top: 7px;
+  color: #f0f2f4;
+  font-size: 17px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.workerCard em {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.planPanel {
+  grid-column: span 7;
+  min-height: 360px;
+}
+
+.briefPanel {
+  grid-column: span 5;
+  min-height: 360px;
+}
+
+.planSummary,
+.taskList,
+.verifyRail,
+.briefPanel pre,
+.briefTask,
+.emptyPlan {
+  position: relative;
+  z-index: 1;
+}
+
+.planSummary {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 4px;
+  background: #0f1118;
+  color: #dfe6ee;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.taskList {
+  display: grid;
+  gap: 7px;
+}
+
+.taskRow {
+  display: grid;
+  grid-template-columns: 1.1fr 96px 1.25fr 72px;
+  gap: 8px;
+  align-items: center;
+  min-height: 58px;
+  padding: 8px;
+  background: #11131a;
+  border-radius: 4px;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+}
+
+.taskRow strong {
+  color: #f0f2f4;
+  font-size: 17px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.taskRow span {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.taskRow em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.taskRow button {
+  padding: 7px 8px;
+  font-size: 13px;
+}
+
+.verifyRail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.verifyRail span {
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: rgba(107,158,216,.13);
+  color: #b9d2ed;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.briefTask {
+  margin-bottom: 8px;
+  color: var(--green);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.briefPanel pre {
+  max-height: 276px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  border-radius: 4px;
+  padding: 10px;
+  background: #0f1118;
+  color: #dfe6ee;
+  font: 700 12px/1.45 Consolas, "Courier New", monospace;
+}
+
+.emptyPlan {
+  min-height: 110px;
+  display: grid;
+  place-content: center;
+  padding: 18px;
+  border-radius: 4px;
+  background: #11131a;
+  color: var(--muted);
+  text-align: center;
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .mainGrid {
@@ -1298,7 +1550,40 @@ body {
 }
 
 @media (max-width: 980px) {
+  .topBar {
+    height: auto;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    padding: 10px;
+  }
+
+  .brandMark,
+  .clockBlock,
+  .agentStatus {
+    justify-self: center;
+    text-align: center;
+  }
+
+  .viewToggle {
+    justify-content: center;
+  }
+
   .mapPage {
+    grid-template-columns: 1fr;
+  }
+
+  .orchestratorPage {
+    grid-template-columns: 1fr;
+  }
+
+  .orchestratorCommand,
+  .workerRouter,
+  .planPanel,
+  .briefPanel {
+    grid-column: auto;
+  }
+
+  .taskRow {
     grid-template-columns: 1fr;
   }
 
@@ -1343,7 +1628,8 @@ body {
   .serverGrid,
   .storageGrid,
   .deviceDetails,
-  .networkStats {
+  .networkStats,
+  .workerGrid {
     grid-template-columns: 1fr;
   }
 
