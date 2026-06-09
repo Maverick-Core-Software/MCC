@@ -863,6 +863,23 @@ function HomePage({ modelStatus }) {
   const reports = seoWorkflow.reports || [];
   const actions = actionQueue?.actions || seoWorkflow.workflowStatus?.actions?.actions || seoWorkflow.actions?.actions || [];
   const actionSummary = actionQueue?.summary || seoWorkflow.workflowStatus?.actions?.summary || seoWorkflow.actions?.summary || {};
+  const nowMs = Date.now();
+  const sevenDaysAgoMs = nowMs - (7 * 24 * 60 * 60 * 1000);
+  const reportsLast7Days = reports.filter((report) => {
+    const reportTime = new Date(report.updatedAt).getTime();
+    return Number.isFinite(reportTime) && reportTime >= sevenDaysAgoMs;
+  });
+  const upcomingActions = actions
+    .filter((action) => {
+      const status = String(action.status || '').toLowerCase();
+      const done = String(action.completion?.completion_status || '').toLowerCase() === 'complete'
+        || String(action.completion?.definition_of_done || '').toLowerCase() === 'yes';
+      return !done && !['dry_run_ready', 'complete', 'completed', 'verified'].includes(status);
+    })
+    .sort((a, b) => {
+      const rank = { needs_approval: 0, approved: 1, blocked_access: 2, needs_review: 3 };
+      return (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
+    });
   const faults = [
     ...(seoWorkflow.faults || []),
     ...(actionQueue?.error ? [actionQueue.error] : []),
@@ -875,7 +892,7 @@ function HomePage({ modelStatus }) {
   const activeWorkflow = seoWorkflow.activeWorkflow || {
     name: 'SEO Automation',
     phase: seoWorkflow.state || 'loading',
-    reportsGenerated: reports.length
+    reportsGenerated: reportsLast7Days.length
   };
 
   async function refreshActions() {
@@ -945,8 +962,8 @@ function HomePage({ modelStatus }) {
             <em>{modelStatus.state === 'online' ? 'LOCAL AI READY' : 'LOCAL AI OFFLINE'}</em>
           </div>
           <div>
-            <span>REPORTS</span>
-            <strong>{seoWorkflow.reportCount ?? reports.length}</strong>
+            <span>7-DAY REPORTS</span>
+            <strong>{reportsLast7Days.length}</strong>
             <em>{seoWorkflow.source === 'repo-bridge' ? 'WINDOWS BRIDGE' : (seoWorkflow.state || 'UNKNOWN').toUpperCase()}</em>
           </div>
           <div>
@@ -961,7 +978,7 @@ function HomePage({ modelStatus }) {
         <div className="workflowCard">
           <strong>{activeWorkflow.name}</strong>
           <span>{activeWorkflow.phase}</span>
-          <em>{activeWorkflow.reportsGenerated || reports.length} reports generated</em>
+          <em>{reportsLast7Days.length} reports in last 7 days</em>
         </div>
         <div className="workflowStats">
           <span>Complete: {statusCounts.complete || 0}</span>
@@ -991,7 +1008,7 @@ function HomePage({ modelStatus }) {
             <div className="reportRow" key={report.name}>
               <strong>{report.name.replace(/_/g, ' ')}</strong>
               <span>{new Date(report.updatedAt).toLocaleString()}</span>
-              <em>{report.headings?.[0] || report.summary?.[0] || 'Report ready'}</em>
+              <em>{report.displayTitle || report.headings?.[0] || report.summary?.[0] || 'Report ready'}</em>
             </div>
           ))}
         </div>
@@ -999,7 +1016,7 @@ function HomePage({ modelStatus }) {
 
       <Panel title="UPCOMING ACTIONS" className="actionsPanel">
         <div className="actionList">
-          {actions.slice(0, 8).map((action) => (
+          {upcomingActions.slice(0, 8).map((action) => (
             <div className="actionRow actionQueueRow" key={action.id}>
               <div>
                 <strong>{action.title}</strong>
@@ -1020,7 +1037,7 @@ function HomePage({ modelStatus }) {
               </div>
             </div>
           ))}
-          {!actions.length ? <div className="emptyPlan">No upcoming actions detected.</div> : null}
+          {!upcomingActions.length ? <div className="emptyPlan">No upcoming actions detected.</div> : null}
           {actionResult ? (
             <div className={actionResult.kind === 'error' ? 'actionResult error' : 'actionResult'}>
               {actionResult.kind === 'error'

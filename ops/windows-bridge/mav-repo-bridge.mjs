@@ -207,6 +207,7 @@ function readMarkdownFile(filePath) {
     name: path.basename(filePath),
     path: filePath,
     updatedAt: stat.mtime.toISOString(),
+    createdAt: stat.birthtime.toISOString(),
     size: stat.size,
     text: fs.readFileSync(filePath, 'utf8')
   };
@@ -227,6 +228,13 @@ function extractHeadings(text, limit = 8) {
     .filter((line) => /^#{1,3}\s+/.test(line))
     .map((line) => line.replace(/^#{1,3}\s+/, ''))
     .slice(0, limit);
+}
+
+function reportDisplayTitle(report) {
+  const firstHeading = extractHeadings(report.text, 1)[0] || report.name.replace(/_/g, ' ');
+  const date = new Date(report.updatedAt);
+  const dateText = Number.isFinite(date.getTime()) ? date.toLocaleDateString('en-US') : '';
+  return firstHeading.replace(/\[Date\]/g, dateText);
 }
 
 function firstNonEmptyLines(text, limit = 4) {
@@ -301,11 +309,18 @@ function loadSeoWorkflow() {
     return [{
       name: report.name,
       updatedAt: report.updatedAt,
+      createdAt: report.createdAt,
       size: report.size,
+      displayTitle: reportDisplayTitle(report),
       headings: extractHeadings(report.text, 6),
       summary: firstNonEmptyLines(report.text, 3),
       statusCounts: extractStatusCounts(report.text)
     }];
+  });
+  const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  const reportsLast7Days = reports.filter((report) => {
+    const reportTime = new Date(report.updatedAt).getTime();
+    return Number.isFinite(reportTime) && reportTime >= sevenDaysAgo;
   });
 
   const allText = reports.map((report) => `${report.name}\n${report.summary.join('\n')}\n${report.headings.join('\n')}`).join('\n\n');
@@ -336,11 +351,12 @@ function loadSeoWorkflow() {
     reportCount: reports.length,
     latestReportAt: reports.map((report) => report.updatedAt).sort().at(-1) || null,
     reports,
+    reportCountLast7Days: reportsLast7Days.length,
     statusCounts,
     activeWorkflow: {
       name: 'Grizzly SEO Automation',
       phase: workflowPhaseLabel(workflowStatus, finalReport ? 'Execution reviewed' : queueReport ? 'Ready for execution' : 'Research needed'),
-      reportsGenerated: reports.length
+      reportsGenerated: reportsLast7Days.length
     },
     workflowStatus,
     nextAction: workflowStatus?.next_action || null,
