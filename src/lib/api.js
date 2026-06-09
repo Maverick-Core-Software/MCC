@@ -49,6 +49,12 @@ export async function queryModelStatus() {
   return response.json();
 }
 
+export async function queryDeployStatus() {
+  const response = await fetch('/api/deploy/status', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Deploy status failed: ${response.status}`);
+  return response.json();
+}
+
 export async function queryOrchestratorStatus() {
   const response = await fetch('/api/orchestrator/status', { cache: 'no-store' });
   if (!response.ok) throw new Error(`Orchestrator status failed: ${response.status}`);

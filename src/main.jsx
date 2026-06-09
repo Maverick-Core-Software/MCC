@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import * as echarts from 'echarts';
-import { useMetrics, useModelStatus, useOrchestratorStatus, useSeoWorkflow } from './hooks/useMetrics.js';
+import { useDeployStatus, useMetrics, useModelStatus, useOrchestratorStatus, useSeoWorkflow } from './hooks/useMetrics.js';
 import {
   approveSeoAction,
   createLocalWorkerBrief,
@@ -122,6 +122,7 @@ function compactModelName(name) {
 
 function TopBar({ status, modelStatus }) {
   const [view, setView] = useDashboardView();
+  const deployStatus = useDeployStatus();
   const time = useMemo(() => {
     const now = status.updatedAt || new Date();
     return new Intl.DateTimeFormat(undefined, {
@@ -130,12 +131,24 @@ function TopBar({ status, modelStatus }) {
       second: '2-digit'
     }).format(now);
   }, [status.updatedAt]);
+  const deployTime = useMemo(() => {
+    if (!deployStatus.deployedAt) return '--:--';
+    return new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(deployStatus.deployedAt));
+  }, [deployStatus.deployedAt]);
+  const deployOk = deployStatus.state === 'ok';
   return (
     <header className="topBar">
       <div className="brandMark">MAV-CONSOLE</div>
       <div className="clockBlock">
         <div>{time}</div>
         <span>{status.state === 'online' ? 'PROMETHEUS ONLINE' : status.state.toUpperCase()}</span>
+      </div>
+      <div className={`deployStatus ${deployOk ? 'online' : 'offline'}`}>
+        <strong>{deployOk ? 'DEPLOY OK' : 'DEPLOY ...'}</strong>
+        <span>{deployTime}</span>
       </div>
       <nav className="viewToggle" aria-label="Dashboard view">
         <button className={view === 'home' ? 'active' : ''} onClick={() => setView('home')}>Home</button>

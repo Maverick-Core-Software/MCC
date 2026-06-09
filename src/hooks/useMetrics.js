@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FALLBACK } from '../config/metrics.js';
-import { queryAllMetrics, queryModelStatus, queryOrchestratorStatus, querySeoWorkflow } from '../lib/api.js';
+import { queryAllMetrics, queryDeployStatus, queryModelStatus, queryOrchestratorStatus, querySeoWorkflow } from '../lib/api.js';
 
 export function useMetrics() {
   const [metrics, setMetrics] = useState(FALLBACK);
@@ -61,6 +61,36 @@ export function useModelStatus() {
   }, []);
 
   return modelStatus;
+}
+
+export function useDeployStatus() {
+  const [deployStatus, setDeployStatus] = useState({
+    state: 'loading',
+    deployedAt: null,
+    error: null
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const next = await queryDeployStatus();
+        if (!cancelled) setDeployStatus({ ...next, error: null });
+      } catch (error) {
+        if (!cancelled) {
+          setDeployStatus((current) => ({ ...current, state: 'error', error: error.message }));
+        }
+      }
+    }
+    load();
+    const timer = setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  return deployStatus;
 }
 
 export function useOrchestratorStatus() {

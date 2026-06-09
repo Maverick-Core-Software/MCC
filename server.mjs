@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, 'dist');
 const port = Number(process.env.PORT || 3010);
+const deployStartedAt = new Date().toISOString();
 const prometheusUrl = process.env.PROMETHEUS_URL || 'http://192.168.1.12:9090';
 const llamaServerUrl = process.env.LLAMA_SERVER_URL || 'http://127.0.0.1:8080';
 const localModel = process.env.LOCAL_MODEL || 'qwen3.6-35b-a3b';
@@ -986,6 +987,10 @@ async function updateTaskRun(req, res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  if (url.pathname === '/api/deploy/status') {
+    sendJson(res, 200, { state: 'ok', deployedAt: deployStartedAt });
+    return;
+  }
   if (url.pathname === '/api/query') {
     await proxyPrometheus(req, res, url);
     return;
