@@ -14,6 +14,9 @@ const repoBridgeUrl = process.env.MAV_REPO_BRIDGE_URL || '';
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const GEMINI_MODES = new Set(['review']); // Gemini = everyday chat only (REVIEW mode)
+const openAiApiKey = process.env.OPENAI_API_KEY || '';
+const nimApiKey = process.env.NVIDIA_NIM_API_KEY || '';
+const nimModel = 'qwen/qwen2.5-coder-32b-instruct';
 const dataDir = process.env.MAV_CONSOLE_DATA_DIR || path.join(__dirname, '.mav-console');
 const ledgerFile = path.join(dataDir, 'task-runs.json');
 const workspacePath = process.env.MAV_CONSOLE_WORKSPACE || __dirname;
@@ -950,6 +953,15 @@ async function streamUpstream(upstream, onToken) {
 }
 
 async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBlock) {
+  async function callOpenAI(messages, maxTokens, temp) {
+    return fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${openAiApiKey}` },
+      body: JSON.stringify({ model: 'gpt-4o', messages, stream: true, temperature: temp, max_tokens: maxTokens })
+    });
+  }
+
   async function callQwen(messages, maxTokens, temp) {
     return fetch(new URL('/v1/chat/completions', llamaServerUrl), {
       method: 'POST',
@@ -959,16 +971,16 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
     });
   }
 
-  // Step 1: Plan (Qwen as architect)
-  sseWrite(res, '\n**[PLANNING — QWEN ARCHITECT]**\n\n');
+  // Step 1: Plan (GPT-4o)
+  sseWrite(res, '\n**[PLANNING — GPT-4o]**\n\n');
   const planMessages = [
-    { role: 'system', content: `You are a senior software architect. Analyze the task and write a clear numbered implementation plan. Specify files to create/modify, APIs to use, and technical approach. Plan only — no code yet.${ctxBlock}` },
+    { role: 'system', content: `You are a senior software architect. Analyze the task and produce a tight, numbered implementation plan. Specify exact files to create or modify, key functions/APIs involved, and the technical approach. Be concise — no code, no filler, just a clear actionable plan.${ctxBlock}` },
     ...histMsgs,
     { role: 'user', content: `Create an implementation plan for:\n\n${prompt}` }
   ];
   let planText = '';
   try {
-    const up = await callQwen(planMessages, 800, 0.3);
+    const up = await callOpenAI(planMessages, 600, 0.3);
     if (up.ok) planText = await streamUpstream(up, d => sseWrite(res, d));
     else sseWrite(res, `[Planning failed: ${up.status}]\n`);
   } catch (err) {
@@ -978,12 +990,12 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
 
   if (!planText || controller.signal.aborted) { res.write('data: [DONE]\n\n'); res.end(); return; }
 
-  // Step 2: Execute (Qwen as engineer)
-  sseWrite(res, '\n\n---\n**[EXECUTING — QWEN ENGINEER]**\n\n');
+  // Step 2: Execute (Qwen local)
+  sseWrite(res, '\n\n---\n**[EXECUTING — QWEN LOCAL]**\n\n');
   const execMessages = [
-    { role: 'system', content: `You are a senior engineer implementing a plan. Write complete, working code. Be precise and thorough. Adapt for technical correctness.${ctxBlock}` },
+    { role: 'system', content: `You are a senior engineer executing a plan. Write complete, working code. Follow the plan exactly. No commentary — only code and necessary file changes.${ctxBlock}` },
     ...histMsgs,
-    { role: 'user', content: `Task: ${prompt}\n\nPlan:\n${planText}\n\nImplement this now. Write all necessary code, commands, and file changes.` }
+    { role: 'user', content: `Task: ${prompt}\n\nPlan:\n${planText}\n\nImplement this now.` }
   ];
   let execText = '';
   try {
@@ -995,7 +1007,31 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
     sseWrite(res, `[Execution error: ${err.message}]\n`);
   }
 
-  // Step 3: QC — reserved for Codex (not yet wired)
+  if (!execText || controller.signal.aborted) { res.write('data: [DONE]\n\n'); res.end(); return; }
+
+  // Step 3: QC (NVIDIA NIM — Qwen2.5-Coder-32B)
+  if (nimApiKey) {
+    sseWrite(res, '\n\n---\n**[QC — NIM QWEN2.5-CODER-32B]**\n\n');
+    try {
+      const qcUp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${nimApiKey}` },
+        body: JSON.stringify({
+          model: nimModel,
+          messages: [
+            { role: 'system', content: 'You are a senior code reviewer. Review the implementation for bugs, edge cases, and correctness. Be concise — 3-5 bullet points max. Flag critical issues only.' },
+            { role: 'user', content: `Task: ${prompt}\n\nPlan:\n${planText}\n\nImplementation:\n${execText.slice(0, 4000)}\n\nQC review:` }
+          ],
+          stream: true, temperature: 0.2, max_tokens: 400
+        })
+      });
+      if (qcUp.ok) await streamUpstream(qcUp, d => sseWrite(res, d));
+      else sseWrite(res, `[QC failed: ${qcUp.status}]\n`);
+    } catch (err) {
+      if (err.name !== 'AbortError') sseWrite(res, `[QC error: ${err.message}]\n`);
+    }
+  }
 
   res.write('data: [DONE]\n\n');
   res.end();
@@ -1036,8 +1072,8 @@ async function handleChat(req, res) {
     const controller = new AbortController();
     req.on('close', () => controller.abort());
 
-    // BUILD mode → Qwen plan → Qwen execute (Codex QC reserved)
-    if (mode === 'build') {
+    // BUILD + OPS → GPT-4o plan → Qwen execute → NIM QC
+    if (mode === 'build' || mode === 'ops') {
       await handleBuildOrchestration(res, controller, prompt.trim(), histMsgs, ctxBlock);
       return;
     }

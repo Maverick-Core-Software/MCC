@@ -8,7 +8,13 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_restarts: 5,
-      env: { NODE_ENV: 'production', PORT: '3000', MAV_REPO_BRIDGE_URL: 'http://127.0.0.1:8790' },
+      env: {
+        NODE_ENV: 'production',
+        PORT: '3000',
+        MAV_REPO_BRIDGE_URL: 'http://127.0.0.1:8790',
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+        NVIDIA_NIM_API_KEY: process.env.NVIDIA_NIM_API_KEY || '',
+      },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
     {
