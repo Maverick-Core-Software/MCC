@@ -3395,6 +3395,147 @@ body {
 .chatMsg.assistant .chatRole { color: var(--cyan); }
 .chatMsg.assistant .chatText { color: #e4e8f0; white-space: pre-wrap; }
 
+/* ── Expanded chat session panel ─────────────────────────────────────────── */
+
+.chatSessionPanel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 520px;
+}
+
+.chatCollapseBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  border: 1px solid rgba(102, 212, 255, .30);
+  border-radius: 3px;
+  padding: 5px 10px;
+  background: rgba(102, 212, 255, .07);
+  color: rgba(102, 212, 255, .75);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.chatCollapseBtn:hover {
+  color: var(--cyan);
+  border-color: rgba(102, 212, 255, .55);
+  background: rgba(102, 212, 255, .12);
+}
+
+.chatSessionHistory {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  max-height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 4px;
+}
+
+.chatSessionHistory .chatMsg {
+  padding: 7px 10px;
+  border-radius: 4px;
+  background: #11131a;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+}
+
+.chatSessionHistory .chatMsg.user {
+  background: rgba(107,158,216,.08);
+}
+
+.chatSessionHistory::-webkit-scrollbar { width: 4px; }
+.chatSessionHistory::-webkit-scrollbar-track { background: transparent; }
+.chatSessionHistory::-webkit-scrollbar-thumb { background: rgba(102, 212, 255, .22); border-radius: 999px; }
+
+.chatSessionEmpty {
+  display: grid;
+  place-content: center;
+  min-height: 80px;
+  color: var(--muted);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.chatSessionModes {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chatSessionForm {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chatSessionInput {
+  width: 100%;
+  border: 1px solid rgba(102, 212, 255, .20);
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: #0f1118;
+  color: var(--text);
+  font: 700 14px/1.5 Inter, system-ui, sans-serif;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.chatSessionInput:focus {
+  outline: none;
+  border-color: rgba(102, 212, 255, .55);
+}
+
+.chatSessionInput::placeholder {
+  color: rgba(102, 212, 255, .28);
+  font-style: normal;
+}
+
+.chatSessionInput:disabled { opacity: .5; }
+
+.chatSessionActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.expandChatBtn {
+  border: 1px solid rgba(102, 212, 255, .22);
+  border-radius: 3px;
+  padding: 5px 10px;
+  background: rgba(102, 212, 255, .05);
+  color: rgba(102, 212, 255, .65);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.expandChatBtn:hover {
+  color: var(--cyan);
+  border-color: rgba(102, 212, 255, .50);
+  background: rgba(102, 212, 255, .10);
+}
+
 /* ── Ask Maverick ────────────────────────────────────────────────────────── */
 
 .mavPage {

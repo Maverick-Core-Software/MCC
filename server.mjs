@@ -915,15 +915,121 @@ async function buildDashboardContext() {
   return lines.join('\n');
 }
 
+function sseWrite(res, text) {
+  if (!res.writable) return;
+  res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+}
+
+async function streamUpstream(upstream, onToken) {
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let collected = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') continue;
+        try {
+          const tok = JSON.parse(raw);
+          const delta = tok.choices?.[0]?.delta?.content || '';
+          if (delta) { collected += delta; onToken(delta); }
+        } catch {}
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return collected;
+}
+
+async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBlock) {
+  async function callQwen(messages, maxTokens, temp) {
+    return fetch(new URL('/v1/chat/completions', llamaServerUrl), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify({ model: localModel, messages, stream: true, temperature: temp, max_tokens: maxTokens })
+    });
+  }
+
+  // Step 1: Plan (Qwen as architect)
+  sseWrite(res, '\n**[PLANNING — QWEN ARCHITECT]**\n\n');
+  const planMessages = [
+    { role: 'system', content: `You are a senior software architect. Analyze the task and write a clear numbered implementation plan. Specify files to create/modify, APIs to use, and technical approach. Plan only — no code yet.${ctxBlock}` },
+    ...histMsgs,
+    { role: 'user', content: `Create an implementation plan for:\n\n${prompt}` }
+  ];
+  let planText = '';
+  try {
+    const up = await callQwen(planMessages, 800, 0.3);
+    if (up.ok) planText = await streamUpstream(up, d => sseWrite(res, d));
+    else sseWrite(res, `[Planning failed: ${up.status}]\n`);
+  } catch (err) {
+    if (err.name === 'AbortError') { res.write('data: [DONE]\n\n'); res.end(); return; }
+    sseWrite(res, `[Planning error: ${err.message}]\n`);
+  }
+
+  if (!planText || controller.signal.aborted) { res.write('data: [DONE]\n\n'); res.end(); return; }
+
+  // Step 2: Execute (Qwen as engineer)
+  sseWrite(res, '\n\n---\n**[EXECUTING — QWEN ENGINEER]**\n\n');
+  const execMessages = [
+    { role: 'system', content: `You are a senior engineer implementing a plan. Write complete, working code. Be precise and thorough. Adapt for technical correctness.${ctxBlock}` },
+    ...histMsgs,
+    { role: 'user', content: `Task: ${prompt}\n\nPlan:\n${planText}\n\nImplement this now. Write all necessary code, commands, and file changes.` }
+  ];
+  let execText = '';
+  try {
+    const up = await callQwen(execMessages, 2000, 0.2);
+    if (up.ok) execText = await streamUpstream(up, d => sseWrite(res, d));
+    else sseWrite(res, `[Execution failed: ${up.status}]\n`);
+  } catch (err) {
+    if (err.name === 'AbortError') { res.write('data: [DONE]\n\n'); res.end(); return; }
+    sseWrite(res, `[Execution error: ${err.message}]\n`);
+  }
+
+  // Step 3: QC (Gemini, if key available)
+  if (geminiApiKey && execText && !controller.signal.aborted) {
+    sseWrite(res, '\n\n---\n**[QC REVIEW — GEMINI]**\n\n');
+    try {
+      const qcUp = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${geminiApiKey}` },
+        body: JSON.stringify({
+          model: geminiModel,
+          messages: [
+            { role: 'system', content: 'You are a senior code reviewer. Review this implementation for correctness, edge cases, and critical issues. Be concise — 3-5 bullet points.' },
+            { role: 'user', content: `Task: ${prompt}\n\nImplementation:\n${execText.slice(0, 3000)}\n\nQC review:` }
+          ],
+          stream: true, temperature: 0.3, max_tokens: 500
+        })
+      });
+      if (qcUp.ok) await streamUpstream(qcUp, d => sseWrite(res, d));
+    } catch (err) {
+      if (err.name !== 'AbortError') sseWrite(res, `[QC error: ${err.message}]\n`);
+    }
+  }
+
+  res.write('data: [DONE]\n\n');
+  res.end();
+}
+
 async function handleChat(req, res) {
   try {
-    const { prompt, mode = 'ask' } = await readJsonBody(req);
+    const { prompt, mode = 'ask', history = [] } = await readJsonBody(req);
     if (!prompt?.trim()) {
       sendJson(res, 400, { error: 'Prompt is required.' });
       return;
     }
 
-    // Build live dashboard context (fast — max ~1.5s for model probe)
     const dashCtx = await buildDashboardContext();
     const ctxBlock = `\n\n--- LIVE DASHBOARD CONTEXT ---\n${dashCtx}\n--- END CONTEXT ---`;
 
@@ -935,6 +1041,12 @@ async function handleChat(req, res) {
     };
     const system = systemPrompts[mode] || systemPrompts.ask;
 
+    // Sanitize history — only valid user/assistant turns with content
+    const histMsgs = (Array.isArray(history) ? history : [])
+      .slice(-20)
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
+      .map(m => ({ role: m.role, content: String(m.content) }));
+
     res.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-cache',
@@ -945,8 +1057,19 @@ async function handleChat(req, res) {
     const controller = new AbortController();
     req.on('close', () => controller.abort());
 
-    // Route: ASK + REVIEW → Gemini Flash (if key set), BUILD + OPS → local Qwen
+    // BUILD mode → orchestrated plan → execute → QC
+    if (mode === 'build') {
+      await handleBuildOrchestration(res, controller, prompt.trim(), histMsgs, ctxBlock);
+      return;
+    }
+
+    // ASK + REVIEW → Gemini Flash (if key set), OPS → local Qwen
     const useGemini = GEMINI_MODES.has(mode) && geminiApiKey;
+    const messages = [
+      { role: 'system', content: system },
+      ...histMsgs,
+      { role: 'user', content: prompt.trim() }
+    ];
 
     let upstream;
     try {
@@ -956,20 +1079,8 @@ async function handleChat(req, res) {
           {
             method: 'POST',
             signal: controller.signal,
-            headers: {
-              'content-type': 'application/json',
-              'Authorization': `Bearer ${geminiApiKey}`
-            },
-            body: JSON.stringify({
-              model: geminiModel,
-              messages: [
-                { role: 'system', content: system },
-                { role: 'user', content: prompt.trim() }
-              ],
-              stream: true,
-              temperature: 0.7,
-              max_tokens: 1400
-            })
+            headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${geminiApiKey}` },
+            body: JSON.stringify({ model: geminiModel, messages, stream: true, temperature: 0.7, max_tokens: 1400 })
           }
         );
       } else {
@@ -977,16 +1088,7 @@ async function handleChat(req, res) {
           method: 'POST',
           signal: controller.signal,
           headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
-          body: JSON.stringify({
-            model: localModel,
-            messages: [
-              { role: 'system', content: system },
-              { role: 'user', content: prompt.trim() }
-            ],
-            stream: true,
-            temperature: 0.7,
-            max_tokens: 1400
-          })
+          body: JSON.stringify({ model: localModel, messages, stream: true, temperature: 0.7, max_tokens: 1400 })
         });
       }
     } catch (fetchErr) {

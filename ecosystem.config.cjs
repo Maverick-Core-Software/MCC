@@ -8,7 +8,7 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_restarts: 5,
-      env: { NODE_ENV: 'production', PORT: '3000' },
+      env: { NODE_ENV: 'production', PORT: '3000', MAV_REPO_BRIDGE_URL: 'http://127.0.0.1:8790' },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
     {
@@ -26,7 +26,7 @@ module.exports = {
     {
       name: 'downloads-watcher',
       script: 'C:\\Users\\carte\\DownloadsOrganizer\\downloads_watcher.py',
-      interpreter: 'C:\\Users\\carte\\DownloadsOrganizer\\.venv\\Scripts\\python.exe',
+      interpreter: 'C:\\Users\\carte\\DownloadsOrganizer\\.venv\\Scripts\\pythonw.exe',
       cwd: 'C:\\Users\\carte\\DownloadsOrganizer',
       watch: false,
       autorestart: true,

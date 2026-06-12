@@ -708,7 +708,63 @@ function workerLabel(workerId) {
   return labels[workerId] || workerId?.toUpperCase?.() || 'UNROUTED';
 }
 
-function OrchestratorPage({ modelStatus }) {
+function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse, onStop, onClear, workflowMode, setWorkflowMode }) {
+  const endRef = useRef(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
+
+  return (
+    <Panel title="CHAT SESSION" className="chatSessionPanel">
+      <button type="button" className="chatCollapseBtn" onClick={onCollapse}>↙ COLLAPSE</button>
+      <div className="chatSessionHistory">
+        {history.length === 0 && <div className="chatSessionEmpty">No messages yet. Send a command below.</div>}
+        {history.map((msg, i) => (
+          <div key={i} className={`chatMsg ${msg.role}`}>
+            <span className="chatRole">{msg.role === 'user' ? 'CMD' : 'MAV'}</span>
+            <span className="chatText">{msg.content || (busy && i === history.length - 1 ? '▋' : '')}</span>
+          </div>
+        ))}
+        <div ref={endRef} />
+      </div>
+      <div className="chatSessionModes">
+        {WORKFLOW_MODES.map(mode => (
+          <button
+            key={mode.id}
+            type="button"
+            disabled={busy}
+            onClick={() => setWorkflowMode(mode.id)}
+            className={`workflowBtn${workflowMode === mode.id ? ' active' : ''}${workflowMode === mode.id && mode.id === 'build' ? ' amber' : ''}`}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+      <form className="chatSessionForm" onSubmit={onSubmit}>
+        <textarea
+          className="chatSessionInput"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder={busy ? 'Maverick is responding...' : 'Enter command or ask Maverick... (Shift+Enter for new line)'}
+          disabled={busy}
+          rows={3}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit(e); } }}
+        />
+        <div className="chatSessionActions">
+          {busy
+            ? <button type="button" className="stopBtn" onClick={onStop}>[ STOP ]</button>
+            : <button type="submit" className="sendBtn" disabled={!input.trim()}>SEND</button>
+          }
+          {history.length > 0 && !busy && (
+            <button type="button" className="clearChatBtn" onClick={onClear}>CLR</button>
+          )}
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+function OrchestratorPage({ modelStatus, chatSession }) {
   const orchestratorStatus = useOrchestratorStatus();
   const [idea, setIdea] = useState('Build an app with my standard tech stack that tells me where the closest ice cream shop is when it is 100 degrees outside.');
   const [activeRun, setActiveRun] = useState(null);
@@ -800,6 +856,20 @@ function OrchestratorPage({ modelStatus }) {
 
   return (
     <div className="orchestratorPage">
+      {chatSession?.expanded && (
+        <ChatSessionPanel
+          history={chatSession.history}
+          busy={chatSession.busy}
+          input={chatSession.input}
+          setInput={chatSession.setInput}
+          onSubmit={chatSession.onSubmit}
+          onCollapse={chatSession.onCollapse}
+          onStop={chatSession.onStop}
+          onClear={chatSession.onClear}
+          workflowMode={chatSession.workflowMode}
+          setWorkflowMode={chatSession.setWorkflowMode}
+        />
+      )}
       <Panel title="AI ORCHESTRATOR V1" className="orchestratorCommand">
         <form onSubmit={handlePlan}>
           <textarea
@@ -1316,6 +1386,7 @@ function App() {
   const { metrics, status } = useMetrics();
 
   const [view, setView] = useState('home');
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [view]);
   const [workflowMode, setWorkflowMode] = useState('ask');
   const [chatHistory, setChatHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem('mcc-chat-history') || '[]'); } catch { return []; }
@@ -1323,6 +1394,7 @@ function App() {
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const [chatExpanded, setChatExpanded] = useState(false);
   const chatAbortRef = useRef(null);
   const maverickHistoryRef = useRef([]);
   const [previewContent, setPreviewContent] = useState(null);
@@ -1393,7 +1465,7 @@ function App() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: userMsg, mode: workflowMode }),
+        body: JSON.stringify({ prompt: userMsg, mode: workflowMode, history: chatHistory }),
         signal: controller.signal
       });
       const reader = response.body.getReader();
@@ -1457,7 +1529,22 @@ function App() {
         ) : view === 'seo' ? (
           <SEOApprovalPage />
         ) : (
-          <OrchestratorPage modelStatus={modelStatus} />
+          <OrchestratorPage
+            modelStatus={modelStatus}
+            chatSession={{
+              expanded: chatExpanded,
+              history: chatHistory,
+              busy: chatBusy,
+              input: chatInput,
+              setInput: setChatInput,
+              onSubmit: handleChatSubmit,
+              onCollapse: () => setChatExpanded(false),
+              onStop: () => chatAbortRef.current?.abort(),
+              onClear: () => { pushChat([]); maverickHistoryRef.current = []; setPreviewContent(null); setChatExpanded(false); },
+              workflowMode,
+              setWorkflowMode,
+            }}
+          />
         )}
         {status.error ? <div className="errorStrip">{status.error}</div> : null}
 
@@ -1510,6 +1597,14 @@ function App() {
             <span className="modelRouteBadge">
               {activeMode.model === 'RAG' ? '◈ MAV RAG' : activeMode.model === 'GEMINI' ? '⬡ GEMINI FLASH' : '◈ LOCAL QWEN'}
             </span>
+            <button
+              type="button"
+              className="expandChatBtn"
+              onClick={() => { setChatExpanded(true); setView('orchestrator'); }}
+              title="Open full chat window in Orchestrator tab"
+            >
+              ↗ EXPAND
+            </button>
           </div>
           <form className="chatForm" onSubmit={handleChatSubmit}>
             <span className="chatPrompt">CMD &gt;</span>
