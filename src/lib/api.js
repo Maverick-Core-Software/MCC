@@ -83,16 +83,6 @@ export async function createLocalWorkerBrief(idea, task) {
   return payload;
 }
 
-export async function runHermesWorker(idea, task) {
-  const response = await fetch('/api/orchestrator/hermes-run', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ idea, task })
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `Hermes run failed: ${response.status}`);
-  return payload;
-}
 
 export async function createTaskRun(idea, task, mode = 'brief') {
   const response = await fetch('/api/orchestrator/task-run', {

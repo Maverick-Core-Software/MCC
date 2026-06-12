@@ -18,9 +18,13 @@ import {
   diskUsedPercent,
   formatCompactNumber,
   formatGbFromBytes,
+  formatMbps,
   formatPortRate,
   smartLabel
 } from './lib/format.js';
+import SEOApprovalPage from './SEOApprovalPage.jsx';
+import ClientDashboard from './ClientDashboard.jsx';
+import { isDocumentResponse, MavMarkdown } from './mavUtils.js';
 import './styles.css';
 
 function Gauge({ label, value, sublabel, color, max = 100, unit = '%', compact = false, valueText = null, decimals = 0 }) {
@@ -115,6 +119,28 @@ function Panel({ title, children, className = '' }) {
   );
 }
 
+function formatFullRate(mbps) {
+  if (!Number.isFinite(mbps)) return 'WAITING';
+  if (mbps >= 1000) return `${(mbps / 1000).toFixed(2)} Gb/s`;
+  if (mbps >= 10) return `${mbps.toFixed(0)} Mb/s`;
+  if (mbps > 0) return `${mbps.toFixed(1)} Mb/s`;
+  return '0 Mb/s';
+}
+
+function formatWanDown(metrics) {
+  const portDown = Number(metrics.switchPort24Rx);
+  if (Number.isFinite(portDown) && portDown > 0) return formatFullRate(portDown);
+  const wanDown = Number(metrics.wanDown);
+  if (Number.isFinite(wanDown)) return formatFullRate(wanDown * 1000);
+  return 'WAITING';
+}
+
+function formatPcUpDown(metrics) {
+  const down = Number.isFinite(metrics.switchPort3Rx) ? metrics.switchPort3Rx : metrics.pcNetIn;
+  const up = Number.isFinite(metrics.switchPort3Tx) ? metrics.switchPort3Tx : metrics.pcNetOut;
+  return `D ${formatMbps(down)} / U ${formatMbps(up)}`;
+}
+
 function compactModelName(name) {
   if (!name) return 'NO MODEL';
   return name.replace(/^qwen/i, 'Qwen').replace(/-/g, ' ');
@@ -141,21 +167,26 @@ function TopBar({ status, modelStatus }) {
   const deployOk = deployStatus.state === 'ok';
   return (
     <header className="topBar">
-      <div className="brandMark">MAV-CONSOLE</div>
       <div className="clockBlock">
         <div>{time}</div>
         <span>{status.state === 'online' ? 'PROMETHEUS ONLINE' : status.state.toUpperCase()}</span>
+      </div>
+      <div className="headerTab">
+        <div className="brandMark">
+          <img src="/assets/maverick-core-commander-logo.png" alt="Maverick Core Commander" />
+        </div>
+        <nav className="viewToggle" aria-label="Dashboard view">
+          <button className={view === 'home' ? 'active' : ''} onClick={() => setView('home')}>Home</button>
+          <button className={view === 'hardware' ? 'active' : ''} onClick={() => setView('hardware')}>Hardware</button>
+          <button className={view === 'network' ? 'active' : ''} onClick={() => setView('network')}>Network Map</button>
+          <button className={view === 'orchestrator' ? 'active' : ''} onClick={() => setView('orchestrator')}>Orchestrator</button>
+          <button className={view === 'seo' ? 'active' : ''} onClick={() => setView('seo')}>SEO Pipeline</button>
+        </nav>
       </div>
       <div className={`deployStatus ${deployOk ? 'online' : 'offline'}`}>
         <strong>{deployOk ? 'DEPLOY OK' : 'DEPLOY ...'}</strong>
         <span>{deployTime}</span>
       </div>
-      <nav className="viewToggle" aria-label="Dashboard view">
-        <button className={view === 'home' ? 'active' : ''} onClick={() => setView('home')}>Home</button>
-        <button className={view === 'hardware' ? 'active' : ''} onClick={() => setView('hardware')}>Hardware</button>
-        <button className={view === 'network' ? 'active' : ''} onClick={() => setView('network')}>Network Map</button>
-        <button className={view === 'orchestrator' ? 'active' : ''} onClick={() => setView('orchestrator')}>Orchestrator</button>
-      </nav>
       <div className={`agentStatus ${modelStatus.state === 'online' ? 'online' : 'offline'}`}>
         LOCAL MODEL: <strong>{compactModelName(modelStatus.model)}</strong>
         <em>|</em>
@@ -175,7 +206,6 @@ function Workstation({ metrics }) {
   const ramUsed = formatGbFromBytes(metrics.pcRamUsedBytes);
   const ramTotal = formatGbFromBytes(metrics.pcRamTotalBytes);
   const driveCUsed = diskUsedPercent(metrics.pcDriveCFreeBytes, metrics.pcDriveCTotalBytes, metrics.pcDrive);
-  const driveDUsed = diskUsedPercent(metrics.pcDriveDFreeBytes, metrics.pcDriveDTotalBytes, metrics.pcDriveD);
   return (
     <Panel title="WORKSTATION: INTEL i5-13600K" className="workstation">
       <div className="gaugeRow pcGaugeRow">
@@ -219,15 +249,21 @@ function Workstation({ metrics }) {
           used={driveCUsed}
           freeBytes={metrics.pcDriveCFreeBytes}
           totalBytes={metrics.pcDriveCTotalBytes}
-          smart={metrics.pcDriveCSmart}
+          healthText="HEALTHY"
         />
         <DriveBlock
-          name="256GB WD-Black SN7100"
-          mount="SECOND NVME"
-          used={driveDUsed}
-          freeBytes={metrics.pcDriveDFreeBytes}
-          totalBytes={metrics.pcDriveDTotalBytes}
-          smart={metrics.pcDriveDSmart}
+          name="256GB Toshiba NVMe"
+          mount="INSTALLED / RAW"
+          totalBytes={256060514304}
+          healthText="HEALTHY"
+          note="No drive letter or filesystem yet"
+        />
+        <DriveBlock
+          name="1TB WD-Black SN7100"
+          mount="PLANNED / BOTTOM NVME"
+          totalBytes={1000204886016}
+          healthText="PENDING"
+          note="Install pending tonight"
         />
       </div>
       <div className="panelFooter">
@@ -301,7 +337,7 @@ function ModelOps({ metrics, modelStatus, orchestratorStatus }) {
         <div className={`claudeMgrChip ${claudeReady ? 'ok' : claudeState === 'loading' ? 'loading' : 'offline'}`}>
           <span>CLAUDE MGR</span>
           <strong>{claudeReady ? 'READY' : claudeState.toUpperCase()}</strong>
-          <em>HERMEN PROMPT QC</em>
+          <em>PLANNER / QC</em>
         </div>
         <div className="promptMetaPanel">
           <div className="promptMetaGrid">
@@ -331,13 +367,16 @@ function ModelOps({ metrics, modelStatus, orchestratorStatus }) {
   );
 }
 
-function DriveBlock({ name, mount, used, freeBytes, totalBytes, smart }) {
+function DriveBlock({ name, mount, used = null, freeBytes = null, totalBytes = null, smart = null, healthText = null, note = null }) {
   const safeUsed = used == null ? null : clampPercent(used);
+  const statusText = healthText || smartLabel(smart);
+  const statusClass = statusText === 'PENDING' ? 'pending' : smart === 0 ? 'bad' : statusText === 'HEALTHY' || smart === 1 ? 'ok' : '';
+  const usedBytes = Number.isFinite(freeBytes) && Number.isFinite(totalBytes) ? totalBytes - freeBytes : null;
   return (
-    <div className="driveBlock">
+    <div className={`driveBlock ${safeUsed == null ? 'waiting' : ''}`}>
       <div className="driveHead">
         <span>{name}</span>
-        <strong className={smart === 0 ? 'bad' : smart === 1 ? 'ok' : ''}>{smartLabel(smart)}</strong>
+        <strong className={statusClass}>{statusText}</strong>
       </div>
       <div className="driveMeta">
         <em>{mount}</em>
@@ -345,9 +384,10 @@ function DriveBlock({ name, mount, used, freeBytes, totalBytes, smart }) {
       </div>
       <div className="miniBar driveUsage"><i style={{ width: `${safeUsed ?? 0}%` }} /></div>
       <div className="driveStats">
-        <span>FREE {formatGbFromBytes(freeBytes)}</span>
+        <span>{usedBytes == null ? 'USED --' : `USED ${formatGbFromBytes(usedBytes)}`}</span>
         <span>TOTAL {formatGbFromBytes(totalBytes)}</span>
       </div>
+      {note ? <div className="driveNote">{note}</div> : null}
     </div>
   );
 }
@@ -377,21 +417,15 @@ function SwitchGraphic() {
 function Network({ metrics }) {
   return (
     <Panel title="NETWORK MAP" className="network">
-      <div className="activePorts">ACTIVE PORTS | LINKING PORTS</div>
-      <SwitchGraphic />
       <HardwareNetworkMap metrics={metrics} />
       <div className="networkStats">
         <div>
           <span>WAN DOWN</span>
-          <strong>{metrics.wanDown?.toFixed?.(2) ?? '0.00'} Gb/s</strong>
+          <strong>{formatWanDown(metrics)}</strong>
         </div>
         <div>
-          <span>PC RECEIVE</span>
-          <strong>{metrics.pcNetIn?.toFixed?.(1) ?? '0.0'} Mb/s</strong>
-        </div>
-        <div>
-          <span>DIRECT LINK</span>
-          <strong className="direct-link-stat">{metrics.serverNetDirect?.toFixed?.(1) ?? '0.0'} Mb/s</strong>
+          <span>PC UP / DOWN</span>
+          <strong>{formatPcUpDown(metrics)}</strong>
         </div>
       </div>
     </Panel>
@@ -405,7 +439,7 @@ function HardwareNetworkMap({ metrics }) {
   const serverHealth = Math.max(clampPercent(metrics.serverCpu), clampPercent(metrics.serverRam), clampPercent(metrics.rootDisk));
   const pcClass = pcHealth >= 85 ? 'danger' : pcHealth >= 60 ? 'warn' : 'good';
   const serverClass = serverHealth >= 85 ? 'danger' : serverHealth >= 60 ? 'warn' : 'good';
-  const gatewayRate = `${metrics.wanDown?.toFixed?.(2) ?? '0.00'} Gb/s`;
+  const gatewayRate = formatWanDown(metrics);
   return (
     <div className="hardwareNetworkMapPanel">
       <div className="hardwareTopology">
@@ -450,7 +484,6 @@ function HardwareNetworkMap({ metrics }) {
           ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
           ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
           ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
-          ['DIRECT', 'Server ↔ PC', serverOnline && pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.serverNetDirect, metrics.pcNetDirect)],
           ['4-22', 'Available', 'IDLE', '-']
         ].map(([port, device, state, rate]) => (
           <div className="hardwarePortRow" key={port}>
@@ -492,7 +525,8 @@ function Server({ metrics }) {
 
 function Storage({ metrics }) {
   const root = clampPercent(metrics.rootDisk);
-  const data = metrics.dataDisk == null ? null : clampPercent(metrics.dataDisk);
+  const localLvmUsed = diskUsedPercent(metrics.pveLocalLvmFreeBytes, metrics.pveLocalLvmTotalBytes, null);
+  const samsungSataUsed = diskUsedPercent(metrics.samsungSataFreeBytes, metrics.samsungSataTotalBytes, null);
   return (
     <Panel title="STORAGE AND HEALTH" className="storage">
       <div className="healthBar">
@@ -503,24 +537,33 @@ function Storage({ metrics }) {
         <strong>98% GOOD</strong>
       </div>
       <div className="storageGrid">
-        <div className="storageBlock">
-          <h3>SERVER ROOT</h3>
-          <p>(PROXMOX 256GB)</p>
-          <div className="miniBar"><i style={{ width: `${root}%` }} /></div>
-          <span>{Math.round(root)}% USED</span>
-        </div>
-        <div className="storageBlock future">
-          <h3>SERVER DATA</h3>
-          <p>(2TB WD-BLACK)</p>
-          <div className="miniBar"><i style={{ width: `${data ?? 0}%` }} /></div>
-          <span>{data == null ? 'WAITING FOR /data' : `${Math.round(data)}% USED`}</span>
-        </div>
-        <div className="storageBlock">
-          <h3>MAIN PC C:</h3>
-          <p>(1TB NVME)</p>
-          <div className="miniBar"><i style={{ width: `${clampPercent(metrics.pcDrive)}%` }} /></div>
-          <span>{Math.round(clampPercent(metrics.pcDrive))}% USED</span>
-        </div>
+        <DriveBlock
+          name="Proxmox Root"
+          mount="/ on pve-root"
+          used={root}
+          freeBytes={metrics.serverRootFreeBytes}
+          totalBytes={metrics.serverRootTotalBytes}
+          healthText="LIVE"
+          note="WD_BLACK SN770 2TB NVMe"
+        />
+        <DriveBlock
+          name="Proxmox local-lvm"
+          mount="LVM THIN / NVME"
+          used={localLvmUsed}
+          freeBytes={metrics.pveLocalLvmFreeBytes}
+          totalBytes={metrics.pveLocalLvmTotalBytes}
+          healthText={localLvmUsed == null ? 'PVE' : 'LIVE'}
+          note="WD_BLACK SN770 2TB NVMe"
+        />
+        <DriveBlock
+          name="Samsung 840 Pro SATA"
+          mount="/mnt/samsung-sata"
+          used={samsungSataUsed}
+          freeBytes={metrics.samsungSataFreeBytes}
+          totalBytes={metrics.samsungSataTotalBytes}
+          healthText={samsungSataUsed == null ? 'INSTALLED' : 'LIVE'}
+          note="Mounted NTFS / SMART passed"
+        />
       </div>
     </Panel>
   );
@@ -560,6 +603,7 @@ function NetworkMapPage({ metrics }) {
   const serverClass = serverHealth >= 85 ? 'danger' : serverHealth >= 60 ? 'warn' : 'good';
   const gatewayClass = metrics.wanDown > 0 || metrics.wanUp > 0 ? 'good' : 'good';
   const meshClass = 'good';
+  const gatewayRate = formatWanDown(metrics);
   return (
     <div className="mapPage">
       <Panel title="LIVE NETWORK MAP" className="mapPanel">
@@ -574,7 +618,7 @@ function NetworkMapPage({ metrics }) {
           </div>
           <div className="mapNode router">
             <span>Gateway Router</span>
-            <strong>{metrics.wanDown?.toFixed?.(2) ?? '0.00'} Gb/s DOWN</strong>
+            <strong>{gatewayRate} DOWN</strong>
           </div>
           <div className="mapNode switch">
             <span>10Gb Network Switch</span>
@@ -638,7 +682,6 @@ function NetworkMapPage({ metrics }) {
             ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
             ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
             ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
-            ['DIRECT', 'Server ↔ PC', serverOnline && pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.serverNetDirect, metrics.pcNetDirect)],
             ['4-22', 'Available', 'IDLE', '-']
           ].map(([port, device, state, rate]) => (
             <div className="portRow" key={port}>
@@ -657,7 +700,6 @@ function NetworkMapPage({ metrics }) {
 function workerLabel(workerId) {
   const labels = {
     'local-qwen': 'LOCAL QWEN',
-    'hermes-qwen': 'HERMES QWEN',
     'repo-bridge': 'REPO BRIDGE',
     'codex-review': 'CODEX REVIEW',
     'claude-cli': 'CLAUDE CLI',
@@ -828,7 +870,7 @@ function OrchestratorPage({ modelStatus }) {
                   </button>
                   <button
                     type="button"
-                    disabled={!['local-qwen', 'hermes-qwen'].includes(task.worker) || briefBusyId === task.id}
+                    disabled={task.worker !== 'local-qwen' || briefBusyId === task.id}
                     onClick={() => handleTaskRun(task)}
                   >
                     {briefBusyId === task.id ? 'Running...' : 'Run + Log'}
@@ -906,6 +948,7 @@ function HomePage({ modelStatus }) {
   const [actionQueue, setActionQueue] = useState(null);
   const [actionBusyId, setActionBusyId] = useState('');
   const [actionResult, setActionResult] = useState(null);
+  const [listModal, setListModal] = useState(null);
   const taskRuns = orchestratorStatus.taskRuns || [];
   const workers = orchestratorStatus.workers || [];
   const onlineWorkers = workers.filter((worker) => /online|available|manual/i.test(worker.state || '')).length;
@@ -930,6 +973,10 @@ function HomePage({ modelStatus }) {
       const rank = { needs_approval: 0, approved: 1, blocked_access: 2, needs_review: 3 };
       return (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
     });
+  const runHealth = seoWorkflow.runHealth || null;
+  const failedPhases = runHealth
+    ? Object.entries(runHealth).filter(([, v]) => v?.status === 'failed')
+    : [];
   const faults = [
     ...(seoWorkflow.faults || []),
     ...(actionQueue?.error ? [actionQueue.error] : []),
@@ -937,13 +984,25 @@ function HomePage({ modelStatus }) {
   ];
   const recentReports = reports
     .slice()
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
-    .slice(0, 5);
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  const visibleActions = upcomingActions.slice(0, 5);
+  const visibleReports = recentReports.slice(0, 5);
+  const visibleTaskRuns = taskRuns.slice(0, 5);
   const activeWorkflow = seoWorkflow.activeWorkflow || {
     name: 'SEO Automation',
     phase: seoWorkflow.state || 'loading',
     reportsGenerated: reportsLast7Days.length
   };
+  function runHealthLabel(phase) {
+    return { research: 'RESEARCH', execute: 'EXECUTE', post_schedule: 'GBP SCHED' }[phase] || phase.toUpperCase();
+  }
+  function runAgeLabel(iso) {
+    if (!iso) return '';
+    const h = Math.round((Date.now() - new Date(iso).getTime()) / 3600000);
+    if (h < 1) return '< 1h ago';
+    if (h < 48) return `${h}h ago`;
+    return `${Math.round(h / 24)}d ago`;
+  }
 
   async function refreshActions() {
     try {
@@ -952,6 +1011,77 @@ function HomePage({ modelStatus }) {
       setActionQueue((current) => ({ ...(current || {}), error: error.message }));
     }
   }
+
+  function renderActionRow(action) {
+    const isBusy = actionBusyId === action.id;
+    const isApproved = action.status === 'approved' || Boolean(action.approval);
+    const canApprove = action.status === 'needs_approval' && action.approval_required && !action.approval;
+    const canRunLive = Boolean(action.live_adapter) && isApproved;
+    const canApproveAndRun = Boolean(action.live_adapter) && canApprove;
+
+    return (
+      <div className="actionRow actionQueueRow" key={action.id}>
+        <div>
+          <strong>{action.title}</strong>
+          <span>{action.status} / {action.platform} / {action.risk}</span>
+          <em>{action.assigned_agent}</em>
+        </div>
+        <div className="actionButtons">
+          <button type="button" disabled={isBusy} onClick={() => handleDryRunAction(action.id)}>
+            Dry Run
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || !canApprove}
+            onClick={() => handleApproveAction(action.id)}
+          >
+            Approve
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || !canApproveAndRun}
+            onClick={() => handleApproveAndRunAction(action.id)}
+          >
+            Approve + Run
+          </button>
+          <button
+            type="button"
+            disabled={isBusy || !canRunLive}
+            onClick={() => handleLiveRunAction(action.id)}
+          >
+            Run Live
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderReportRow(report) {
+    return (
+      <div className="reportRow" key={report.name}>
+        <strong>{report.name.replace(/_/g, ' ')}</strong>
+        <span>{new Date(report.updatedAt).toLocaleString()}</span>
+        <em>{report.displayTitle || report.headings?.[0] || report.summary?.[0] || 'Report ready'}</em>
+      </div>
+    );
+  }
+
+  function renderTaskRunRow(taskRun) {
+    return (
+      <div className="recentTaskRow" key={taskRun.id}>
+        <strong>{taskRun.taskTitle}</strong>
+        <span>{workerLabel(taskRun.worker)} / {taskRun.status}</span>
+      </div>
+    );
+  }
+
+  const modalConfig = listModal === 'actions'
+    ? { title: 'Upcoming Actions', count: upcomingActions.length, rows: upcomingActions.map(renderActionRow), empty: 'No upcoming actions detected.' }
+    : listModal === 'reports'
+      ? { title: 'Recent Reports', count: recentReports.length, rows: recentReports.map(renderReportRow), empty: 'No reports detected.' }
+      : listModal === 'tasks'
+        ? { title: 'Recent Task Runs', count: taskRuns.length, rows: taskRuns.map(renderTaskRunRow), empty: 'No task runs logged yet.' }
+        : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -997,6 +1127,33 @@ function HomePage({ modelStatus }) {
     }
   }
 
+  async function handleLiveRunAction(actionId) {
+    setActionBusyId(actionId);
+    try {
+      const result = await runSeoAction(actionId, true);
+      setActionResult({ kind: 'live-run', actionId, result });
+      await refreshActions();
+    } catch (error) {
+      setActionResult({ kind: 'error', actionId, error: error.message });
+    } finally {
+      setActionBusyId('');
+    }
+  }
+
+  async function handleApproveAndRunAction(actionId) {
+    setActionBusyId(actionId);
+    try {
+      const approval = await approveSeoAction(actionId, 'Approved and queued for live run from MCC action queue.');
+      const run = await runSeoAction(actionId, true);
+      setActionResult({ kind: 'approve-run', actionId, result: { approval, run } });
+      await refreshActions();
+    } catch (error) {
+      setActionResult({ kind: 'error', actionId, error: error.message });
+    } finally {
+      setActionBusyId('');
+    }
+  }
+
   return (
     <div className="homePage">
       <Panel title="OPERATIONS COMMAND" className="homeHero">
@@ -1021,6 +1178,13 @@ function HomePage({ modelStatus }) {
             <strong>{faults.length}</strong>
             <em>{faults.length ? 'NEEDS REVIEW' : 'CLEAR'}</em>
           </div>
+          <div>
+            <span>LOCAL MODEL</span>
+            <strong style={{ fontSize: modelStatus.model ? '16px' : '30px' }}>
+              {modelStatus.model ? modelStatus.model.replace(/^[^/]+\//, '') : (modelStatus.state === 'loading' ? '...' : 'OFFLINE')}
+            </strong>
+            <em>{modelStatus.contextTokens != null ? `${modelStatus.contextTokens.toLocaleString()} CTX` : modelStatus.state.toUpperCase()}</em>
+          </div>
         </div>
       </Panel>
 
@@ -1038,6 +1202,30 @@ function HomePage({ modelStatus }) {
           <span>Needs approval: {actionSummary.needs_approval || 0}</span>
           <span>Access blocked: {actionSummary.blocked_access || 0}</span>
         </div>
+        <div className={`workflowFaultStrip ${faults.length ? 'hasFaults' : ''}`}>
+          <span>{faults.length ? 'Faults / Blockers' : 'Faults'}</span>
+          <strong>{faults.length ? faults.length : 'Clear'}</strong>
+          <em>{faults[0] || 'No current workflow faults.'}</em>
+        </div>
+        {runHealth && (
+          <div className="runHealthStrip">
+            <span className="runHealthLabel">LAST RUNS</span>
+            <div className="runHealthPhases">
+              {Object.entries(runHealth).map(([phase, entry]) => (
+                <div key={phase} className={`runHealthPhase ${entry?.status === 'failed' ? 'failed' : 'ok'}`}>
+                  <span>{runHealthLabel(phase)}</span>
+                  <strong>{entry?.status === 'failed' ? '✗ FAILED' : '✓ OK'}</strong>
+                  <em>{runAgeLabel(entry?.at)}</em>
+                </div>
+              ))}
+            </div>
+            {failedPhases.length > 0 && (
+              <div className="runHealthAlert">
+                ⚠ {failedPhases.length} phase{failedPhases.length > 1 ? 's' : ''} failed — check logs before next Friday run
+              </div>
+            )}
+          </div>
+        )}
       </Panel>
 
       <Panel title="AGENT FLEET" className="agentFleetPanel">
@@ -1052,41 +1240,13 @@ function HomePage({ modelStatus }) {
         </div>
       </Panel>
 
-      <Panel title="RECENT REPORTS" className="reportsPanel">
-        <div className="reportList">
-          {recentReports.map((report) => (
-            <div className="reportRow" key={report.name}>
-              <strong>{report.name.replace(/_/g, ' ')}</strong>
-              <span>{new Date(report.updatedAt).toLocaleString()}</span>
-              <em>{report.displayTitle || report.headings?.[0] || report.summary?.[0] || 'Report ready'}</em>
-            </div>
-          ))}
-        </div>
-      </Panel>
-
       <Panel title="UPCOMING ACTIONS" className="actionsPanel">
-        <div className="actionList">
-          {upcomingActions.slice(0, 8).map((action) => (
-            <div className="actionRow actionQueueRow" key={action.id}>
-              <div>
-                <strong>{action.title}</strong>
-                <span>{action.status} / {action.platform} / {action.risk}</span>
-                <em>{action.assigned_agent}</em>
-              </div>
-              <div className="actionButtons">
-                <button type="button" disabled={actionBusyId === action.id} onClick={() => handleDryRunAction(action.id)}>
-                  Dry Run
-                </button>
-                <button
-                  type="button"
-                  disabled={actionBusyId === action.id || action.status !== 'needs_approval' || !action.approval_required || Boolean(action.approval)}
-                  onClick={() => handleApproveAction(action.id)}
-                >
-                  Approve
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="panelListToolbar">
+          <span>{upcomingActions.length} total</span>
+          <button type="button" disabled={upcomingActions.length <= 5} onClick={() => setListModal('actions')}>View all</button>
+        </div>
+        <div className="actionList compactList">
+          {visibleActions.map(renderActionRow)}
           {!upcomingActions.length ? <div className="emptyPlan">No upcoming actions detected.</div> : null}
           {actionResult ? (
             <div className={actionResult.kind === 'error' ? 'actionResult error' : 'actionResult'}>
@@ -1098,40 +1258,193 @@ function HomePage({ modelStatus }) {
         </div>
       </Panel>
 
-      <Panel title="FAULTS / BLOCKERS" className="faultPanel">
-        <div className="faultList">
-          {faults.length ? faults.map((fault) => <div className="faultRow" key={fault}>{fault}</div>) : <div className="clearState">No current workflow faults.</div>}
+      <Panel title="RECENT REPORTS" className="reportsPanel">
+        <div className="panelListToolbar">
+          <span>{recentReports.length} total</span>
+          <button type="button" disabled={recentReports.length <= 5} onClick={() => setListModal('reports')}>View all</button>
+        </div>
+        <div className="reportList compactList">
+          {visibleReports.map(renderReportRow)}
         </div>
       </Panel>
 
       <Panel title="RECENT TASK RUNS" className="recentTaskPanel">
-        <div className="recentTaskList">
-          {taskRuns.slice(0, 6).map((taskRun) => (
-            <div className="recentTaskRow" key={taskRun.id}>
-              <strong>{taskRun.taskTitle}</strong>
-              <span>{workerLabel(taskRun.worker)} / {taskRun.status}</span>
-            </div>
-          ))}
+        <div className="panelListToolbar">
+          <span>{taskRuns.length} total</span>
+          <button type="button" disabled={taskRuns.length <= 5} onClick={() => setListModal('tasks')}>View all</button>
+        </div>
+        <div className="recentTaskList compactList">
+          {visibleTaskRuns.map(renderTaskRunRow)}
           {!taskRuns.length ? <div className="emptyPlan">No task runs logged yet.</div> : null}
         </div>
       </Panel>
+
+      {modalConfig ? (
+        <div className="listModalOverlay" role="presentation" onClick={() => setListModal(null)}>
+          <section className="listModal" role="dialog" aria-modal="true" aria-label={modalConfig.title} onClick={(event) => event.stopPropagation()}>
+            <div className="listModalHead">
+              <div>
+                <span>{modalConfig.count} total</span>
+                <strong>{modalConfig.title}</strong>
+              </div>
+              <button type="button" onClick={() => setListModal(null)}>Close</button>
+            </div>
+            <div className="listModalBody">
+              {modalConfig.rows.length ? modalConfig.rows : <div className="emptyPlan">{modalConfig.empty}</div>}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
 
+const WORKFLOW_MODES = [
+  { id: 'ask',    label: '[ ASK MAVERICK ]',    model: 'RAG'    },
+  { id: 'build',  label: '[ BUILD / FIX ]',     model: 'LOCAL'  },
+  { id: 'review', label: '[ REVIEW & REASON ]', model: 'GEMINI' },
+  { id: 'ops',    label: '[ OPS / DEBUG ]',     model: 'LOCAL'  },
+];
+
+const MAV_RAG_URL = 'http://192.168.1.12:8181/estimate';
+
 function App() {
+  const isClientMode = new URLSearchParams(window.location.search).has('client');
+
   const modelStatus = useModelStatus();
   const orchestratorStatus = useOrchestratorStatus();
   const { metrics, status } = useMetrics();
+
   const [view, setView] = useState('home');
+  const [workflowMode, setWorkflowMode] = useState('ask');
+  const [chatHistory, setChatHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mcc-chat-history') || '[]'); } catch { return []; }
+  });
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const chatAbortRef = useRef(null);
+  const maverickHistoryRef = useRef([]);
+  const [previewContent, setPreviewContent] = useState(null);
+
+  if (isClientMode) {
+    return <ClientDashboard status={status} />;
+  }
+
+  const activeMode = WORKFLOW_MODES.find(m => m.id === workflowMode) || WORKFLOW_MODES[0];
+
+  function pushChat(messages) {
+    setChatHistory(prev => {
+      const next = typeof messages === 'function' ? messages(prev) : messages;
+      try { localStorage.setItem('mcc-chat-history', JSON.stringify(next.slice(-40))); } catch {}
+      return next;
+    });
+  }
+
+  async function handleChatSubmit(e) {
+    e.preventDefault();
+    if (!chatInput.trim() || chatBusy) return;
+    const userMsg = chatInput.trim();
+    setChatInput('');
+    setChatBusy(true);
+    setChatPanelOpen(true);
+    pushChat(prev => [...prev, { role: 'user', content: userMsg }, { role: 'assistant', content: '' }]);
+
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
+
+    if (workflowMode === 'ask') {
+      try {
+        const history = maverickHistoryRef.current;
+        const res = await fetch(MAV_RAG_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ message: userMsg, history, top_k: 12 }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`RAG API ${res.status}`);
+        const data = await res.json();
+        const reply = data.reply || '[No response]';
+        maverickHistoryRef.current = [...history, { role: 'user', content: userMsg }, { role: 'assistant', content: reply }];
+        pushChat(prev => {
+          const next = [...prev];
+          next[next.length - 1] = { role: 'assistant', content: reply };
+          return next;
+        });
+        if (isDocumentResponse(reply)) setPreviewContent(reply);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          pushChat(prev => {
+            const next = [...prev];
+            next[next.length - 1] = { role: 'assistant', content: `[Error: ${err.message}]` };
+            return next;
+          });
+        }
+      } finally {
+        setChatBusy(false);
+        chatAbortRef.current = null;
+      }
+      return;
+    }
+
+    let accum = '';
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: userMsg, mode: workflowMode }),
+        signal: controller.signal
+      });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const tok = JSON.parse(raw);
+            const delta = tok.choices?.[0]?.delta?.content || '';
+            if (delta) {
+              accum += delta;
+              pushChat(prev => {
+                const next = [...prev];
+                next[next.length - 1] = { role: 'assistant', content: accum };
+                return next;
+              });
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        pushChat(prev => {
+          const next = [...prev];
+          next[next.length - 1] = { role: 'assistant', content: `[Error: ${err.message}]` };
+          return next;
+        });
+      }
+    } finally {
+      setChatBusy(false);
+      chatAbortRef.current = null;
+    }
+  }
+
   return (
     <DashboardViewContext.Provider value={[view, setView]}>
-      <main className="dashboard">
+      <main className="dashboard" data-theme="ops-glass" data-theme-saved="Rugged-Ops Command">
         <TopBar status={status} modelStatus={modelStatus} />
         {view === 'home' ? (
           <HomePage modelStatus={modelStatus} />
         ) : view === 'hardware' ? (
-          <div className="mainGrid">
+          <div className="mainGrid hardwareGrid">
             <Workstation metrics={metrics} />
             <ModelOps metrics={metrics} modelStatus={modelStatus} orchestratorStatus={orchestratorStatus} />
             <Network metrics={metrics} />
@@ -1141,10 +1454,88 @@ function App() {
           </div>
         ) : view === 'network' ? (
           <NetworkMapPage metrics={metrics} />
+        ) : view === 'seo' ? (
+          <SEOApprovalPage />
         ) : (
           <OrchestratorPage modelStatus={modelStatus} />
         )}
         {status.error ? <div className="errorStrip">{status.error}</div> : null}
+
+        {previewContent && (
+          <div className="docPreview">
+            <div className="docPreviewHeader">
+              <span className="docPreviewLabel">DOCUMENT PREVIEW</span>
+              <button className="docPreviewClose" onClick={() => setPreviewContent(null)}>✕ Close</button>
+            </div>
+            <div className="docPreviewBody">
+              <MavMarkdown content={previewContent} />
+            </div>
+          </div>
+        )}
+
+        <div className="commandBar">
+          {chatPanelOpen && chatHistory.length > 0 && (
+            <div className="chatHistory">
+              {chatHistory.slice(-6).map((msg, i) => {
+                const content = msg.content || (chatBusy && i === chatHistory.length - 1 ? '...' : '');
+                const isDoc = msg.role === 'assistant' && isDocumentResponse(msg.content);
+                return (
+                  <div key={i} className={`chatMsg ${msg.role}`}>
+                    <span className="chatRole">{msg.role === 'user' ? 'CMD' : 'MAV'}</span>
+                    <span className="chatText">
+                      {isDoc ? msg.content.slice(0, 120) + '…' : content}
+                    </span>
+                    {isDoc && (
+                      <button className="chatPreviewBtn" onClick={() => setPreviewContent(msg.content)}>
+                        ↑ Preview
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="workflowStrip">
+            {WORKFLOW_MODES.map(mode => (
+              <button
+                key={mode.id}
+                type="button"
+                disabled={chatBusy}
+                onClick={() => setWorkflowMode(mode.id)}
+                className={`workflowBtn${workflowMode === mode.id ? ' active' : ''}${workflowMode === mode.id && mode.id === 'build' ? ' amber' : ''}`}
+              >
+                {mode.label}
+              </button>
+            ))}
+            <span className="modelRouteBadge">
+              {activeMode.model === 'RAG' ? '◈ MAV RAG' : activeMode.model === 'GEMINI' ? '⬡ GEMINI FLASH' : '◈ LOCAL QWEN'}
+            </span>
+          </div>
+          <form className="chatForm" onSubmit={handleChatSubmit}>
+            <span className="chatPrompt">CMD &gt;</span>
+            <input
+              type="text"
+              className="chatInput"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              placeholder={chatBusy ? 'Maverick is responding...' : 'Enter command or ask Maverick...'}
+              disabled={chatBusy}
+            />
+            {chatBusy ? (
+              <button type="button" className="stopBtn" onClick={() => chatAbortRef.current?.abort()}>[ STOP ]</button>
+            ) : (
+              <button type="submit" className="sendBtn" disabled={!chatInput.trim()}>SEND</button>
+            )}
+            {chatHistory.length > 0 && (
+              <button type="button" className="chatToggleBtn" onClick={() => setChatPanelOpen(p => !p)}>
+                {chatPanelOpen ? '▼' : '▲'}
+              </button>
+            )}
+            {chatHistory.length > 0 && !chatBusy && (
+              <button type="button" className="clearChatBtn" onClick={() => { pushChat([]); maverickHistoryRef.current = []; setPreviewContent(null); setChatPanelOpen(false); }}>CLR</button>
+            )}
+          </form>
+        </div>
       </main>
     </DashboardViewContext.Provider>
   );

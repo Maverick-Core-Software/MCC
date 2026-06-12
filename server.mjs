@@ -2,22 +2,18 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, 'dist');
-const port = Number(process.env.PORT || 3010);
+const port = Number(process.env.PORT || 3011);
 const deployStartedAt = new Date().toISOString();
 const prometheusUrl = process.env.PROMETHEUS_URL || 'http://192.168.1.12:9090';
 const llamaServerUrl = process.env.LLAMA_SERVER_URL || 'http://127.0.0.1:8080';
-const localModel = process.env.LOCAL_MODEL || 'qwen3.6-35b-a3b';
-const hermesWorkerUrl = process.env.HERMES_WORKER_URL || '';
+const localModel = process.env.LOCAL_MODEL || 'qwen3-14b';
 const repoBridgeUrl = process.env.MAV_REPO_BRIDGE_URL || '';
-const hermesExe = process.env.HERMES_EXE || 'C:\\Users\\carte\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe';
-const hermesWorkdir = process.env.HERMES_WORKDIR || 'C:\\Users\\carte';
-const hermesTimeoutMs = Number(process.env.HERMES_TIMEOUT_MS || 180_000);
-const hermenRepoTimeoutMs = Number(process.env.HERMEN_REPO_TIMEOUT_MS || Math.max(hermesTimeoutMs, 420_000));
-const claudeManagerTimeoutMs = Number(process.env.CLAUDE_MANAGER_TIMEOUT_MS || 180_000);
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODES = new Set(['ask', 'review']);
 const dataDir = process.env.MAV_CONSOLE_DATA_DIR || path.join(__dirname, '.mav-console');
 const ledgerFile = path.join(dataDir, 'task-runs.json');
 const workspacePath = process.env.MAV_CONSOLE_WORKSPACE || __dirname;
@@ -302,7 +298,7 @@ async function proxySeoActions(req, res, action) {
       sendJson(res, 200, await callRepoBridge('/seo/actions/run', {
         method: 'POST',
         body: payload,
-        timeoutMs: 240_000
+        timeoutMs: 600_000
       }));
     }
   } catch (error) {
@@ -343,19 +339,6 @@ async function callLocalModel(input, { maxOutputTokens = 1400 } = {}) {
   return textFromLlamaResponse(payload);
 }
 
-async function createClaudeManagedWorkOrder({ idea, task, mode, repoPath }) {
-  return callRepoBridge('/worker/claude-manager', {
-    method: 'POST',
-    timeoutMs: claudeManagerTimeoutMs,
-    body: {
-      idea,
-      task,
-      mode,
-      repo: repoPath
-    }
-  });
-}
-
 function fallbackPlan(idea, rawText = '') {
   return {
     summary: rawText || `Build a scoped MVP for: ${idea}`,
@@ -369,13 +352,6 @@ function fallbackPlan(idea, rawText = '') {
       },
       {
         id: 'task-2',
-        title: 'Create agent execution brief',
-        worker: 'hermes-qwen',
-        reason: 'Hermes can use Qwen with tools for a controlled first implementation pass.',
-        status: 'queued'
-      },
-      {
-        id: 'task-3',
         title: 'Review architecture and risk',
         worker: 'codex-review',
         reason: 'Save hosted usage for final judgment and edge cases.',
@@ -407,122 +383,12 @@ function parsePlan(idea, rawText) {
   }
 }
 
-function hermesAvailable() {
-  if (hermesWorkerUrl) return true;
-  return fs.existsSync(hermesExe);
-}
-
 function workerIds() {
-  return ['local-qwen', 'hermes-qwen', 'repo-bridge', 'codex-review', 'claude-cli', 'rag-server'];
+  return ['local-qwen', 'repo-bridge', 'codex-review', 'claude-cli', 'rag-server'];
 }
 
 function normalizeWorker(worker) {
   return workerIds().includes(worker) ? worker : 'local-qwen';
-}
-
-async function runHermesOneshot(prompt, { timeoutMs = hermesTimeoutMs } = {}) {
-  if (hermesWorkerUrl) {
-    return runHermesBridge(prompt, { timeoutMs });
-  }
-  if (!hermesAvailable()) {
-    throw new Error(`Hermes executable not found: ${hermesExe}`);
-  }
-  return new Promise((resolve, reject) => {
-    const child = spawn(hermesExe, ['-z', prompt, '--toolsets', 'terminal,file,hermes-cli'], {
-      cwd: hermesWorkdir,
-      windowsHide: true
-    });
-    let stdout = '';
-    let stderr = '';
-    const timeout = setTimeout(() => {
-      child.kill('SIGTERM');
-      reject(new Error(`Hermes timed out after ${Math.round(timeoutMs / 1000)}s`));
-    }, timeoutMs);
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      clearTimeout(timeout);
-      if (code === 0) {
-        resolve({ output: stdout.trim(), stderr: stderr.trim(), exitCode: code });
-        return;
-      }
-      reject(new Error((stderr || stdout || `Hermes exited with ${code}`).trim()));
-    });
-  });
-}
-
-async function runHermesBridge(prompt, { timeoutMs = hermesTimeoutMs } = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(new URL('/run', hermesWorkerUrl), {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        toolsets: 'terminal,file,hermes-cli',
-        timeoutMs
-      })
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload?.error || `Hermes bridge failed: ${response.status}`);
-    }
-    return {
-      output: payload.output || payload.brief || '',
-      stderr: payload.stderr || '',
-      exitCode: payload.exitCode ?? 0,
-      bridge: hermesWorkerUrl,
-      durationMs: payload.durationMs ?? null
-    };
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error(`Hermes bridge timed out after ${Math.round(timeoutMs / 1000)}s`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function runRepoBridgeHermen(prompt, { timeoutMs = hermenRepoTimeoutMs } = {}) {
-  if (!repoBridgeUrl) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(new URL('/worker/hermen/run', repoBridgeUrl), {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        repo: workspacePath,
-        timeoutMs,
-        toolsets: 'terminal,file,hermes-cli'
-      })
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload?.error || `Repo bridge failed: ${response.status}`);
-    }
-    return payload;
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error(`Repo bridge timed out after ${Math.round(timeoutMs / 1000)}s`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 async function getRepoBridgeState() {
@@ -545,37 +411,6 @@ async function getRepoBridgeState() {
   } catch (error) {
     return {
       endpoint: repoBridgeUrl,
-      state: 'bridge-offline',
-      detail: error.name === 'AbortError' ? 'health timed out' : error.message
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function getHermesState() {
-  if (!hermesWorkerUrl) {
-    return {
-      endpoint: hermesExe,
-      state: fs.existsSync(hermesExe) ? 'available-local-dev' : 'not-on-host'
-    };
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
-  try {
-    const response = await fetch(new URL('/health', hermesWorkerUrl), {
-      signal: controller.signal,
-      headers: { accept: 'application/json' }
-    });
-    const payload = await response.json();
-    return {
-      endpoint: hermesWorkerUrl,
-      state: response.ok && payload?.state === 'online' ? 'bridge-online' : 'bridge-error',
-      detail: payload?.model || payload?.hermesExe || null
-    };
-  } catch (error) {
-    return {
-      endpoint: hermesWorkerUrl,
       state: 'bridge-offline',
       detail: error.name === 'AbortError' ? 'health timed out' : error.message
     };
@@ -783,7 +618,6 @@ async function getLlamaStatus(res) {
 }
 
 async function getOrchestratorStatus(res) {
-  const hermesState = await getHermesState();
   const repoBridgeState = await getRepoBridgeState();
   const memoryIndex = await getMemoryIndex();
   const taskRuns = readLedger();
@@ -797,15 +631,6 @@ async function getOrchestratorStatus(res) {
         cost: 'local',
         endpoint: llamaServerUrl,
         state: 'online-check-via-model-panel'
-      },
-      {
-        id: 'hermes-qwen',
-        label: 'Hermes/Qwen Agent',
-        role: 'tool-enabled local worker',
-        cost: 'local',
-        endpoint: hermesState.endpoint,
-        state: hermesState.state,
-        detail: hermesState.detail
       },
       {
         id: 'repo-bridge',
@@ -826,9 +651,9 @@ async function getOrchestratorStatus(res) {
       {
         id: 'claude-cli',
         label: 'Claude CLI',
-        role: 'Hermen prompt manager',
+        role: 'specialist implementation pass',
         cost: 'subscription-gated',
-        state: 'manager-ready'
+        state: 'manual-gated'
       },
       {
         id: 'rag-server',
@@ -860,18 +685,17 @@ Return only JSON with this shape:
 {
   "summary": "one sentence",
   "tasks": [
-    { "id": "task-1", "title": "short action", "worker": "local-qwen|hermes-qwen|codex-review|claude-cli|rag-server", "reason": "why this worker", "status": "ready|queued" }
+    { "id": "task-1", "title": "short action", "worker": "local-qwen|codex-review|claude-cli|rag-server", "reason": "why this worker", "status": "ready|queued" }
   ],
   "verification": ["short verification step"]
 }
 
 Rules:
-- Route simple planning and low-risk coding briefs to local-qwen.
-- Route tool-enabled local implementation prep to hermes-qwen.
-- Route architecture, risk, and final QC to codex-review.
-- Use claude-cli only for a hard specialist implementation pass.
-- Use rag-server only when previous projects, docs, or client memory matter.
-- Keep the plan to 4-7 tasks.`;
+- Route planning, coding briefs, and implementation to local-qwen.
+- Route architecture review and quality checks to codex-review.
+- Use claude-cli only for a specialist implementation pass.
+- Use rag-server only when project memory or prior context matters.
+- Keep the plan to 3-6 tasks.`;
     const rawText = await callLocalModel(prompt);
     const plan = parsePlan(idea.trim(), rawText);
     const run = {
@@ -914,45 +738,6 @@ Return a compact execution brief with:
 Do not claim you changed files.`;
     const brief = await callLocalModel(prompt, { maxOutputTokens: 900 });
     sendJson(res, 200, { brief, createdAt: new Date().toISOString() });
-  } catch (error) {
-    sendJson(res, 500, { error: error.message });
-  }
-}
-
-async function createHermesWorkerRun(req, res) {
-  try {
-    const { idea, task } = await readJsonBody(req);
-    if (!idea || !task?.title) {
-      sendJson(res, 400, { error: 'Idea and task.title are required.' });
-      return;
-    }
-    const prompt = `You are Hermes/Qwen inside mav-console. This is a controlled worker assignment, not an open-ended autonomous project.
-
-Product idea:
-${idea}
-
-Assigned task:
-${task.title}
-
-Worker routing reason:
-${task.reason || 'No reason supplied.'}
-
-Use tools only for lightweight inspection if needed. Return:
-1. What you inspected
-2. Recommended implementation steps
-3. Commands to run
-4. Risks or blockers
-
-Do not modify files unless the assigned task explicitly says to implement changes.`;
-    const result = await runHermesOneshot(prompt);
-    sendJson(res, 200, {
-      brief: result.output,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      bridge: result.bridge || null,
-      durationMs: result.durationMs || null,
-      createdAt: new Date().toISOString()
-    });
   } catch (error) {
     sendJson(res, 500, { error: error.message });
   }
@@ -1007,52 +792,7 @@ async function createTaskRun(req, res) {
     let output = '';
     let stderr = '';
     let durationMs = null;
-    let managerWorkOrder = null;
-    if (worker === 'hermes-qwen') {
-      managerWorkOrder = await createClaudeManagedWorkOrder({ idea, task, mode, repoPath: workspacePath });
-      const prompt = `You are Hermen, the local Hermes/Qwen worker inside mav-console.
-
-Claude CLI has already reduced this into a scoped work order. Execute only this work order.
-
-Workspace:
-${workspacePath}
-
-Mode:
-${mode}
-
-Claude manager summary:
-${managerWorkOrder.summary}
-
-Hermen work order:
-${managerWorkOrder.harmenPrompt}
-
-Rules:
-- Keep the work tightly scoped to the work order.
-- If mode is "brief", inspect/recommend only and do not edit files.
-- If mode is "implement", make minimal edits only if the work order explicitly asks for implementation.
-- At the end, include a short "Files changed:" section.
-- Include verification commands run or recommended.`;
-      const result = await runRepoBridgeHermen(prompt) || await runHermesOneshot(prompt);
-      output = `Claude manager:
-${managerWorkOrder.summary}
-
-Hermen work order:
-${managerWorkOrder.harmenPrompt}
-
-Hermen result:
-${result.output}`;
-      stderr = result.stderr || '';
-      durationMs = (managerWorkOrder.durationMs || 0) + (result.durationMs || 0);
-      ledgerRun.repoPath = result.repoPath || workspacePath;
-      ledgerRun.repoBefore = result.before || null;
-      ledgerRun.repoAfter = result.after || null;
-      ledgerRun.repoBaselineDirty = Boolean(result.baselineDirty);
-      ledgerRun.allChangedFiles = Array.isArray(result.allChangedFiles) ? result.allChangedFiles : [];
-      ledgerRun.changedFiles = Array.isArray(result.changedFiles) ? result.changedFiles : [];
-      ledgerRun.diffStat = result.diffStat || '';
-      ledgerRun.diff = result.diff || '';
-      ledgerRun.verification = managerWorkOrder.qcChecks;
-    } else if (worker === 'local-qwen') {
+    if (worker === 'local-qwen') {
       const prompt = `You are the local Qwen coding worker inside mav-console.
 
 Product idea:
@@ -1104,7 +844,6 @@ Do not claim you changed files.`;
 function workerLabelForServer(worker) {
   const labels = {
     'local-qwen': 'Local Qwen',
-    'hermes-qwen': 'Hermen',
     'repo-bridge': 'Repo Bridge',
     'codex-review': 'Codex Review',
     'claude-cli': 'Claude CLI',
@@ -1135,8 +874,166 @@ async function updateTaskRun(req, res) {
   }
 }
 
+async function buildDashboardContext() {
+  const lines = [
+    `DATE/TIME: ${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+  ];
+
+  // Local model — quick probe, 1.5s timeout
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1500);
+    const r = await fetch(new URL('/v1/models', llamaServerUrl), { signal: ctrl.signal });
+    clearTimeout(t);
+    const payload = await r.json();
+    const modelId = payload?.data?.[0]?.id || payload?.models?.[0]?.id || 'unknown';
+    lines.push(`LOCAL MODEL: ${r.ok ? 'ONLINE' : 'ERROR'} | ${modelId}`);
+  } catch {
+    lines.push('LOCAL MODEL: OFFLINE');
+  }
+
+  // Active orchestrator plan (in-memory, sync)
+  const runs = orchestratorState.runs || [];
+  if (runs.length > 0) {
+    const latest = runs[0];
+    const taskCount = latest.plan?.tasks?.length || 0;
+    const doneCount = latest.plan?.tasks?.filter(t => t.status === 'done' || t.status === 'complete').length || 0;
+    lines.push(`ACTIVE PLAN: "${latest.plan?.summary || latest.idea || 'unnamed'}" | ${doneCount}/${taskCount} tasks done`);
+  } else {
+    lines.push('ACTIVE PLAN: none');
+  }
+
+  // Recent task runs from ledger (sync read)
+  try {
+    const taskRuns = readLedger();
+    if (taskRuns.length > 0) {
+      const recent = taskRuns.slice(0, 3).map(t => `${t.taskTitle} [${t.status}]`).join(' | ');
+      lines.push(`RECENT TASKS: ${recent}`);
+    }
+  } catch {}
+
+  return lines.join('\n');
+}
+
+async function handleChat(req, res) {
+  try {
+    const { prompt, mode = 'ask' } = await readJsonBody(req);
+    if (!prompt?.trim()) {
+      sendJson(res, 400, { error: 'Prompt is required.' });
+      return;
+    }
+
+    // Build live dashboard context (fast — max ~1.5s for model probe)
+    const dashCtx = await buildDashboardContext();
+    const ctxBlock = `\n\n--- LIVE DASHBOARD CONTEXT ---\n${dashCtx}\n--- END CONTEXT ---`;
+
+    const systemPrompts = {
+      ask: `You are Maverick, the AI operations assistant for Maverick Integrations. You are friendly, direct, and concise. You have access to live data from the MCC dashboard — use it to answer questions about system status, active work, and operations. When the user asks about their environment, customers, or work in progress, reference the context below.${ctxBlock}`,
+      build: `You are Maverick in BUILD mode. Focus on code, implementation, and technical execution. Be precise and provide working code. Avoid explanations unless asked.${ctxBlock}`,
+      review: `You are Maverick in REVIEW mode. Analyze carefully, reason through edge cases, and provide thorough structured explanations. Reference the dashboard context when relevant.${ctxBlock}`,
+      ops: `You are Maverick in OPS mode. You are a systems expert focused on operations, debugging, infrastructure, and system health. Use the live dashboard context to diagnose issues and recommend actions.${ctxBlock}`,
+    };
+    const system = systemPrompts[mode] || systemPrompts.ask;
+
+    res.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache',
+      'connection': 'keep-alive',
+      'x-accel-buffering': 'no'
+    });
+
+    const controller = new AbortController();
+    req.on('close', () => controller.abort());
+
+    // Route: ASK + REVIEW → Gemini Flash (if key set), BUILD + OPS → local Qwen
+    const useGemini = GEMINI_MODES.has(mode) && geminiApiKey;
+
+    let upstream;
+    try {
+      if (useGemini) {
+        upstream = await fetch(
+          'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+          {
+            method: 'POST',
+            signal: controller.signal,
+            headers: {
+              'content-type': 'application/json',
+              'Authorization': `Bearer ${geminiApiKey}`
+            },
+            body: JSON.stringify({
+              model: geminiModel,
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: prompt.trim() }
+              ],
+              stream: true,
+              temperature: 0.7,
+              max_tokens: 1400
+            })
+          }
+        );
+      } else {
+        upstream = await fetch(new URL('/v1/chat/completions', llamaServerUrl), {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+          body: JSON.stringify({
+            model: localModel,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: prompt.trim() }
+            ],
+            stream: true,
+            temperature: 0.7,
+            max_tokens: 1400
+          })
+        });
+      }
+    } catch (fetchErr) {
+      res.write(`data: ${JSON.stringify({ error: fetchErr.message })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    if (!upstream.ok) {
+      const errText = await upstream.text().catch(() => `status ${upstream.status}`);
+      res.write(`data: ${JSON.stringify({ error: errText })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    }
+
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!res.writable) break;
+        res.write(decoder.decode(value, { stream: true }));
+      }
+    } finally {
+      reader.releaseLock();
+      if (res.writable) res.end();
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      try {
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      } catch {}
+    }
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  if (url.pathname === '/api/chat' && req.method === 'POST') {
+    await handleChat(req, res);
+    return;
+  }
   if (url.pathname === '/api/deploy/status') {
     sendJson(res, 200, { state: 'ok', deployedAt: deployStartedAt });
     return;
@@ -1180,10 +1077,6 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/orchestrator/local-brief' && req.method === 'POST') {
     await createLocalWorkerBrief(req, res);
-    return;
-  }
-  if (url.pathname === '/api/orchestrator/hermes-run' && req.method === 'POST') {
-    await createHermesWorkerRun(req, res);
     return;
   }
   if (url.pathname === '/api/orchestrator/task-run' && req.method === 'POST') {

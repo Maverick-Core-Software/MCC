@@ -13,6 +13,9 @@ const allowedRoots = (process.env.MAV_REPO_ALLOWED_ROOTS || 'C:\\Workspace\\Acti
   .map((item) => path.resolve(item.trim()))
   .filter(Boolean);
 const hermesExe = process.env.HERMES_EXE || 'C:\\Users\\carte\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\hermes.exe';
+// Lean Hermes profile for worker spawns (max_turns 20, low reasoning effort,
+// no memory/curator/LSP). Set to '' to use the default desktop profile.
+const hermesProfile = process.env.MAV_HERMES_PROFILE ?? 'worker';
 const defaultTimeoutMs = Number(process.env.MAV_REPO_HERMES_TIMEOUT_MS || 300_000);
 const maxBodyBytes = Number(process.env.MAV_REPO_MAX_BODY_BYTES || 160_000);
 const maxDiffBytes = Number(process.env.MAV_REPO_MAX_DIFF_BYTES || 120_000);
@@ -488,6 +491,7 @@ function loadSeoWorkflow() {
   const queueReport = readMarkdownFile(path.join(outputsDir, 'grizzly_execution_queue.md'));
   const scheduleReport = readMarkdownFile(path.join(outputsDir, 'gbp_posting_schedule.md'));
   const workflowStatus = readJsonFile(path.join(outputsDir, 'workflow_status.json'));
+  const runHealth = readJsonFile(path.join(outputsDir, 'run_health.json'));
   const markdownStatusCounts = extractStatusCounts([
     finalReport?.text || '',
     readMarkdownFile(path.join(outputsDir, 'content_completion.md'))?.text || '',
@@ -496,6 +500,16 @@ function loadSeoWorkflow() {
   ].join('\n'));
   const statusCounts = workflowCountsFromStatus(workflowStatus, markdownStatusCounts);
   const faults = [];
+  // Run health faults — surface failed phases immediately so MCC shows a red badge
+  if (runHealth) {
+    for (const [phase, entry] of Object.entries(runHealth)) {
+      if (entry?.status === 'failed') {
+        const label = { research: 'Research', execute: 'Execution', post_schedule: 'GBP Post Schedule' }[phase] || phase;
+        const errMsg = entry.error ? `: ${entry.error.slice(0, 120)}` : '';
+        faults.push(`⚠ ${label} run FAILED${errMsg}`);
+      }
+    }
+  }
   for (const reportName of ['final_report.md', 'grizzly_execution_queue.md', 'gbp_posting_schedule.md']) {
     if (!fs.existsSync(path.join(outputsDir, reportName))) faults.push(`Missing ${reportName}`);
   }
@@ -521,6 +535,7 @@ function loadSeoWorkflow() {
       reportsGenerated: reportsLast7Days.length
     },
     workflowStatus,
+    runHealth,
     nextAction: workflowStatus?.next_action || null,
     ownerSignoffs,
     taskSummary: workflowStatus?.summary || null,
@@ -558,7 +573,17 @@ async function repoDiff(repoPath) {
   return git(repoPath, ['diff', '--', '.'], { maxBytes: maxDiffBytes });
 }
 
-async function runHermes(prompt, { repoPath, timeoutMs = defaultTimeoutMs, toolsets = 'terminal,file,hermes-cli' } = {}) {
+// Serialize all Hermen runs: the local llama-server has a small fixed number of
+// KV-cache slots, and two concurrent agentic workers evict each other's cache,
+// forcing full prompt reprocessing every turn. Queued runs wait their turn.
+let hermesLock = Promise.resolve();
+function withHermesLock(fn) {
+  const run = hermesLock.then(fn, fn);
+  hermesLock = run.then(() => {}, () => {});
+  return run;
+}
+
+async function runHermes(prompt, { repoPath, timeoutMs = defaultTimeoutMs, toolsets = 'terminal,file' } = {}) {
   if (!fs.existsSync(hermesExe)) {
     throw new Error(`Hermes executable not found: ${hermesExe}`);
   }
@@ -567,12 +592,16 @@ async function runHermes(prompt, { repoPath, timeoutMs = defaultTimeoutMs, tools
     throw new Error(`Hermen prompt too large: ${prompt.length} chars exceeds ${maxHermenPromptChars}. Split the task into a smaller scoped pass.`);
   }
   const guardedPrompt = buildHermenPrompt(prompt, { repoPath });
-  const childArgs = ['-z', guardedPrompt, '--toolsets', toolsets];
-  const result = await runCommand(hermesExe, childArgs, {
+  const childArgs = [
+    ...(hermesProfile ? ['-p', hermesProfile] : []),
+    '-z', guardedPrompt,
+    '--toolsets', toolsets
+  ];
+  const result = await withHermesLock(() => runCommand(hermesExe, childArgs, {
     cwd: repoPath,
     timeoutMs: clampHermenTimeout(timeoutMs),
     maxBytes: 120_000
-  });
+  }));
   return {
     output: result.stdout,
     stderr: result.stderr,
@@ -740,7 +769,7 @@ const server = http.createServer(async (req, res) => {
       }
       const args = ['run-action', actionId];
       if (live) args.push('--live');
-      sendJson(res, 200, await seoCommandJson(args, { timeoutMs: 240_000 }));
+      sendJson(res, 200, await seoCommandJson(args, { timeoutMs: 600_000 }));
       return;
     }
 

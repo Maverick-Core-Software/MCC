@@ -10,6 +10,7 @@
     "start": "node server.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
     "@vitejs/plugin-react": "^5.1.1",
     "echarts": "^6.0.0",
     "react": "^19.2.1",
