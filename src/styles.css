@@ -14,6 +14,35 @@
   --red: #c75050;
   --blue: #6b9ed8;
   --cyan: #66d4ff;
+  --amber: #ffb347;
+  --ops: #50f0a0;
+}
+
+/* ── Page transitions ───────────────────────────────────────────────────── */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pageWrapper {
+  animation: pageIn 0.22s ease-out both;
+}
+
+/* ── Status dot pulse ───────────────────────────────────────────────────── */
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 8px var(--green); opacity: 1; }
+  50%       { box-shadow: 0 0 18px var(--green), 0 0 6px rgba(117,191,114,.5); opacity: .85; }
+}
+
+@keyframes dotWarn {
+  0%, 100% { box-shadow: 0 0 8px var(--yellow); opacity: 1; }
+  50%       { box-shadow: 0 0 18px var(--yellow); opacity: .80; }
+}
+
+/* ── Brand glow cycle ───────────────────────────────────────────────────── */
+@keyframes brandCycle {
+  0%, 100% { text-shadow: 0 0 18px rgba(102,212,255,.22); }
+  50%       { text-shadow: 0 0 28px rgba(102,212,255,.38), 0 0 8px rgba(102,212,255,.12); }
 }
 
 * {
@@ -56,8 +85,8 @@ body {
   padding: 0 12px;
   margin-bottom: 8px;
   background: linear-gradient(180deg, #1e2029, #13141b);
-  border-radius: 3px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.75);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.75), 0 0 0 1px rgba(102,212,255,.07);
   font-family: "Barlow Condensed", Inter, sans-serif;
   letter-spacing: 0.04em;
 }
@@ -69,7 +98,9 @@ body {
   font-size: 22px;
   font-weight: 800;
   color: #f5f7fb;
-  text-shadow: 0 0 16px rgba(112, 173, 255, .18);
+  text-shadow: 0 0 18px rgba(102,212,255,.22);
+  animation: brandCycle 4s ease-in-out infinite;
+  letter-spacing: .06em;
 }
 
 .brandMark img {
@@ -111,7 +142,7 @@ body {
   text-align: center;
   line-height: 1;
   background: #0d0f15;
-  border-radius: 3px;
+  border-radius: 8px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
 }
 
@@ -148,14 +179,14 @@ body {
   gap: 3px;
   padding: 3px;
   background: #0d0f15;
-  border-radius: 4px;
+  border-radius: 10px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
 }
 
 .viewToggle button {
   border: 0;
-  border-radius: 3px;
-  padding: 5px 10px;
+  border-radius: 8px;
+  padding: 5px 12px;
   background: transparent;
   color: var(--muted);
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -164,6 +195,11 @@ body {
   letter-spacing: .05em;
   text-transform: uppercase;
   cursor: pointer;
+  transition: all 0.15s;
+}
+
+.viewToggle button:hover {
+  color: var(--text);
 }
 
 .viewToggle button.active {
@@ -223,9 +259,10 @@ body {
 .clearState,
 .recentTaskRow {
   background: #11131a;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
   font-family: "Barlow Condensed", Inter, sans-serif;
+  transition: box-shadow 0.15s;
 }
 
 .homeHeroGrid > div {
@@ -350,7 +387,7 @@ body {
 .workflowStats span {
   padding: 8px 10px;
   background: rgba(107,158,216,.13);
-  border-radius: 3px;
+  border-radius: 6px;
   color: #b9d2ed;
   font-family: "Barlow Condensed", Inter, sans-serif;
   font-size: 17px;
@@ -369,7 +406,7 @@ body {
   margin-top: 8px;
   padding: 9px;
   background: rgba(68, 159, 116, .14);
-  border-radius: 3px;
+  border-radius: 8px;
   color: var(--green);
   font-family: "Barlow Condensed", Inter, sans-serif;
   text-transform: uppercase;
@@ -414,7 +451,7 @@ body {
   margin-top: 8px;
   padding: 9px;
   background: rgba(30, 40, 55, .55);
-  border-radius: 3px;
+  border-radius: 8px;
   border: 1px solid rgba(102, 212, 255, .10);
   font-family: "Barlow Condensed", Inter, sans-serif;
   text-transform: uppercase;
@@ -439,7 +476,7 @@ body {
   flex: 1;
   min-width: 90px;
   padding: 6px 8px;
-  border-radius: 3px;
+  border-radius: 6px;
   background: rgba(68, 159, 116, .12);
   border: 1px solid rgba(68, 159, 116, .25);
   color: var(--green);
@@ -479,7 +516,7 @@ body {
   margin-top: 7px;
   padding: 5px 8px;
   background: rgba(220, 80, 80, .15);
-  border-radius: 3px;
+  border-radius: 6px;
   border: 1px solid rgba(220, 80, 80, .30);
   color: #ff8080;
   font-size: 12px;
@@ -521,8 +558,8 @@ body {
 .panelListToolbar button,
 .listModalHead button {
   border: 0;
-  border-radius: 3px;
-  padding: 6px 9px;
+  border-radius: 6px;
+  padding: 6px 10px;
   background: rgba(107,158,216,.16);
   color: #dcecff;
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -531,6 +568,13 @@ body {
   letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
+  transition: all 0.15s;
+}
+
+.panelListToolbar button:hover:not(:disabled),
+.listModalHead button:hover:not(:disabled) {
+  background: rgba(107,158,216,.26);
+  color: #edf5ff;
 }
 
 .panelListToolbar button:disabled {
@@ -553,11 +597,13 @@ body {
   border-radius: 50%;
   background: var(--yellow);
   box-shadow: 0 0 10px var(--yellow);
+  animation: dotWarn 2.2s ease-in-out infinite;
 }
 
 .agentFleetRow > span.ok {
   background: var(--green);
   box-shadow: 0 0 10px var(--green);
+  animation: dotPulse 2.8s ease-in-out infinite;
 }
 
 .agentFleetRow strong,
@@ -1345,16 +1391,25 @@ body {
 .panel {
   position: relative;
   min-height: 0;
-  padding: 10px;
+  padding: 12px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0)),
     var(--panel);
-  border-radius: 4px;
+  border-radius: 12px;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.07),
     inset 0 -1px 0 rgba(0,0,0,.75),
-    0 12px 24px rgba(0,0,0,.18);
+    0 12px 28px rgba(0,0,0,.22);
   overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.panel:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.09),
+    inset 0 -1px 0 rgba(0,0,0,.75),
+    0 12px 28px rgba(0,0,0,.22),
+    0 0 0 1px rgba(102,212,255,.07);
 }
 
 .panel::after {
@@ -1376,12 +1431,16 @@ body {
   font-weight: 800;
   letter-spacing: .035em;
   text-transform: uppercase;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
+  padding-left: 10px;
+  border-left: 2px solid var(--cyan);
   text-shadow: 0 1px 0 #000;
 }
 
 .network > .panelTitle {
   text-align: center;
+  padding-left: 0;
+  border-left: none;
 }
 
 .panelFooter {
@@ -3198,16 +3257,16 @@ body {
 
 .workflowStrip {
   display: flex;
-  gap: 4px;
-  padding: 8px 14px 4px;
+  gap: 6px;
+  padding: 10px 14px 6px;
   border-bottom: 1px solid rgba(102, 212, 255, .10);
 }
 
 .workflowBtn {
   flex: 1;
-  padding: 5px 0;
+  padding: 6px 12px;
   border: 1px solid rgba(102, 212, 255, .20);
-  border-radius: 2px;
+  border-radius: 100px;
   background: transparent;
   color: rgba(102, 212, 255, .45);
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -3216,29 +3275,42 @@ body {
   letter-spacing: .06em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: all 0.18s cubic-bezier(.34,1.56,.64,1);
 }
 
 .workflowBtn:hover:not(:disabled) {
   color: var(--cyan);
   border-color: rgba(102, 212, 255, .50);
   background: rgba(102, 212, 255, .06);
+  transform: translateY(-1px);
+}
+
+.workflowBtn:active:not(:disabled) {
+  transform: translateY(0) scale(.97);
 }
 
 .workflowBtn.active {
   color: var(--cyan);
   border-color: rgba(102, 212, 255, .65);
   background: rgba(102, 212, 255, .12);
-  box-shadow: 0 0 8px rgba(102, 212, 255, .18), inset 0 0 10px rgba(102, 212, 255, .04);
+  box-shadow: 0 0 12px rgba(102, 212, 255, .20), inset 0 0 10px rgba(102, 212, 255, .05);
   text-shadow: 0 0 8px rgba(102, 212, 255, .6);
 }
 
 .workflowBtn.active.amber {
-  color: #66d4ff;
+  color: var(--amber);
   border-color: rgba(255, 154, 0, .65);
   background: rgba(196, 120, 0, .12);
-  box-shadow: 0 0 8px rgba(255, 154, 0, .18);
+  box-shadow: 0 0 12px rgba(255, 154, 0, .20);
   text-shadow: 0 0 8px rgba(255, 154, 0, .6);
+}
+
+.workflowBtn.active.green {
+  color: var(--ops);
+  border-color: rgba(80, 240, 160, .65);
+  background: rgba(50, 180, 110, .12);
+  box-shadow: 0 0 12px rgba(80, 240, 160, .20);
+  text-shadow: 0 0 8px rgba(80, 240, 160, .6);
 }
 
 .workflowBtn:disabled {
@@ -3292,8 +3364,8 @@ body {
 .sendBtn,
 .stopBtn {
   border: 1px solid rgba(102, 212, 255, .40);
-  border-radius: 2px;
-  padding: 5px 12px;
+  border-radius: 8px;
+  padding: 5px 14px;
   background: rgba(102, 212, 255, .10);
   color: var(--cyan);
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -3303,7 +3375,7 @@ body {
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.12s;
+  transition: all 0.15s;
 }
 
 .sendBtn:hover:not(:disabled) {
@@ -3331,13 +3403,13 @@ body {
 .chatToggleBtn,
 .clearChatBtn {
   border: 1px solid rgba(102, 212, 255, .18);
-  border-radius: 2px;
-  padding: 4px 8px;
+  border-radius: 6px;
+  padding: 4px 10px;
   background: transparent;
   color: rgba(102, 212, 255, .45);
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: all 0.15s;
 }
 
 .chatToggleBtn:hover,
@@ -3349,14 +3421,14 @@ body {
 /* --- Attach feature --- */
 .attachBtn {
   border: 1px solid rgba(102, 212, 255, .25);
-  border-radius: 2px;
+  border-radius: 6px;
   padding: 4px 10px;
   background: transparent;
   color: rgba(102, 212, 255, .6);
   font-family: inherit;
   font-size: 0.72rem;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: all 0.15s;
   white-space: nowrap;
 }
 .attachBtn:hover { color: var(--cyan); border-color: rgba(102, 212, 255, .5); }
@@ -3374,11 +3446,11 @@ body {
   gap: 4px;
   background: rgba(102, 212, 255, .08);
   border: 1px solid rgba(102, 212, 255, .22);
-  border-radius: 2px;
-  padding: 2px 6px;
+  border-radius: 100px;
+  padding: 3px 8px;
   font-size: 0.68rem;
   color: var(--cyan);
-  max-width: 200px;
+  max-width: 220px;
 }
 .attachChipLabel {
   overflow: hidden;
@@ -3395,6 +3467,7 @@ body {
   padding: 0;
 }
 .attachChipRemove:hover { color: var(--cyan); }
+.folderChip { border-color: rgba(102, 255, 178, .4); color: #66ffb2; }
 
 .pathInputRow {
   display: flex;
@@ -3405,7 +3478,7 @@ body {
   flex: 1;
   background: rgba(0,0,0,.35);
   border: 1px solid rgba(102, 212, 255, .28);
-  border-radius: 2px;
+  border-radius: 6px;
   color: var(--cyan);
   font-family: inherit;
   font-size: 0.72rem;
@@ -3415,7 +3488,7 @@ body {
 .pathInput:focus { border-color: rgba(102, 212, 255, .55); }
 .pathAddBtn, .pathCancelBtn {
   border: 1px solid rgba(102, 212, 255, .22);
-  border-radius: 2px;
+  border-radius: 6px;
   background: transparent;
   color: rgba(102, 212, 255, .6);
   font-family: inherit;
@@ -3491,8 +3564,8 @@ body {
   right: 10px;
   z-index: 2;
   border: 1px solid rgba(102, 212, 255, .30);
-  border-radius: 3px;
-  padding: 5px 10px;
+  border-radius: 100px;
+  padding: 5px 12px;
   background: rgba(102, 212, 255, .07);
   color: rgba(102, 212, 255, .75);
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -3501,7 +3574,7 @@ body {
   letter-spacing: .04em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: all 0.15s;
 }
 
 .chatCollapseBtn:hover {
@@ -3524,8 +3597,8 @@ body {
 }
 
 .chatSessionHistory .chatMsg {
-  padding: 7px 10px;
-  border-radius: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background: #11131a;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
@@ -3568,18 +3641,19 @@ body {
 .chatSessionInput {
   width: 100%;
   border: 1px solid rgba(102, 212, 255, .20);
-  border-radius: 4px;
-  padding: 10px 12px;
+  border-radius: 10px;
+  padding: 10px 14px;
   background: #0f1118;
   color: var(--text);
   font: 700 14px/1.5 Inter, system-ui, sans-serif;
   resize: vertical;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .chatSessionInput:focus {
   outline: none;
   border-color: rgba(102, 212, 255, .55);
+  box-shadow: 0 0 0 3px rgba(102,212,255,.06);
 }
 
 .chatSessionInput::placeholder {
@@ -3597,8 +3671,8 @@ body {
 
 .expandChatBtn {
   border: 1px solid rgba(102, 212, 255, .22);
-  border-radius: 3px;
-  padding: 5px 10px;
+  border-radius: 100px;
+  padding: 5px 12px;
   background: rgba(102, 212, 255, .05);
   color: rgba(102, 212, 255, .65);
   font-family: "Barlow Condensed", Inter, sans-serif;
@@ -3658,15 +3732,16 @@ body {
 
 .mavClearBtn {
   font-size: 11px;
-  padding: 5px 12px;
-  border-radius: 4px;
+  padding: 5px 14px;
+  border-radius: 100px;
   border: 1px solid rgba(255,255,255,.15);
   background: rgba(255,255,255,.05);
   color: #c0c8d8;
   cursor: pointer;
   letter-spacing: .04em;
+  transition: all 0.15s;
 }
-.mavClearBtn:hover { background: rgba(255,255,255,.1); }
+.mavClearBtn:hover { background: rgba(255,255,255,.1); transform: translateY(-1px); }
 
 .mavChat {
   flex: 1;
@@ -3692,14 +3767,15 @@ body {
 .mavPrompts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .mavPromptChip {
   font-size: 12px;
-  padding: 6px 12px;
-  border-radius: 4px;
+  padding: 7px 14px;
+  border-radius: 100px;
   border: 1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.04);
   color: rgba(255,255,255,.6);
   cursor: pointer;
   text-align: left;
   max-width: 280px;
+  transition: all 0.15s;
 }
 .mavPromptChip:hover { background: rgba(0,255,200,.08); border-color: rgba(0,255,200,.2); color: var(--cyan); }
 
@@ -3787,33 +3863,36 @@ body {
   resize: none;
   background: rgba(255,255,255,.05);
   border: 1px solid rgba(255,255,255,.12);
-  border-radius: 6px;
+  border-radius: 10px;
   color: #d8dce8;
   font-size: 13px;
   line-height: 1.5;
-  padding: 10px 12px;
+  padding: 10px 14px;
   font-family: inherit;
   outline: none;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
-.mavTextarea:focus { border-color: rgba(0,255,200,.3); background: rgba(255,255,255,.07); }
+.mavTextarea:focus { border-color: rgba(102,212,255,.35); background: rgba(255,255,255,.07); box-shadow: 0 0 0 3px rgba(102,212,255,.06); }
 .mavTextarea::placeholder { color: rgba(255,255,255,.25); }
 .mavTextarea:disabled { opacity: .5; }
 
 .mavSendBtn {
-  padding: 10px 20px;
-  border-radius: 6px;
-  border: 1px solid rgba(0,255,200,.3);
-  background: rgba(0,255,200,.1);
+  padding: 10px 22px;
+  border-radius: 100px;
+  border: 1px solid rgba(102,212,255,.35);
+  background: rgba(102,212,255,.12);
   color: var(--cyan);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: .06em;
   cursor: pointer;
   white-space: nowrap;
   align-self: flex-end;
   height: 42px;
+  transition: all 0.18s cubic-bezier(.34,1.56,.64,1);
 }
-.mavSendBtn:hover:not(:disabled) { background: rgba(0,255,200,.2); }
+.mavSendBtn:hover:not(:disabled) { background: rgba(102,212,255,.22); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(102,212,255,.18); }
+.mavSendBtn:active:not(:disabled) { transform: translateY(0) scale(.97); }
 .mavSendBtn:disabled { opacity: .4; cursor: not-allowed; }
 .mavSendBtn--loading { opacity: .6; }
 
@@ -4519,4 +4598,264 @@ body {
   button {
     min-height: 36px;
   }
+}
+
+/* ── Build Chat Panel ──────────────────────────────────────────────────────── */
+
+.buildChatPage {
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.buildChatPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 70vh;
+}
+
+.buildChatHistory {
+  flex: 1;
+  min-height: 300px;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.buildChatHistory::-webkit-scrollbar { width: 4px; }
+.buildChatHistory::-webkit-scrollbar-track { background: transparent; }
+.buildChatHistory::-webkit-scrollbar-thumb { background: rgba(102,212,255,.22); border-radius: 999px; }
+
+.buildChatEmpty {
+  display: grid;
+  place-content: center;
+  min-height: 120px;
+  color: var(--muted);
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.buildChatMsg {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #11131a;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.buildChatMsg.user {
+  background: rgba(107,158,216,.08);
+}
+
+.buildChatRole {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding-top: 2px;
+  min-width: 42px;
+}
+
+.buildChatMsg.user .buildChatRole { color: var(--blue); }
+.buildChatMsg.assistant .buildChatRole { color: var(--cyan); }
+
+.buildChatText {
+  color: #d8dce4;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.buildChatBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.buildChatStatus {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  opacity: .75;
+  padding: 3px 8px;
+  background: rgba(102,212,255,.07);
+  border-left: 2px solid rgba(102,212,255,.35);
+  border-radius: 0 5px 5px 0;
+}
+
+.buildChatAction {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+.buildChatAction.ok {
+  color: rgba(80,240,160,.85);
+  background: rgba(80,240,160,.06);
+}
+
+.buildChatAction.err {
+  color: rgba(255,100,80,.85);
+  background: rgba(255,100,80,.06);
+}
+
+.buildChatContent {
+  color: #e4e8f0;
+  font-size: 13.5px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.buildChatQc {
+  margin-top: 4px;
+  border: 1px solid rgba(255,180,50,.22);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: rgba(255,180,50,.04);
+}
+
+.buildChatQcLabel {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255,200,80,.7);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.buildChatQcText {
+  font-size: 12px;
+  color: rgba(255,220,140,.8);
+  white-space: pre-wrap;
+  margin: 0;
+  font-family: inherit;
+}
+
+.buildChatStaged {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(80,240,160,.35);
+  border-radius: 10px;
+  background: rgba(80,240,160,.06);
+}
+
+.buildChatStagedLabel {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  flex: 1;
+}
+
+.buildChatApplyBtn {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 6px 18px;
+  border: 1px solid rgba(80,240,160,.5);
+  border-radius: 100px;
+  background: rgba(80,240,160,.1);
+  color: rgba(80,240,160,.9);
+  cursor: pointer;
+  transition: all .18s cubic-bezier(.34,1.56,.64,1);
+}
+
+.buildChatApplyBtn:hover:not(:disabled) {
+  background: rgba(80,240,160,.18);
+  border-color: rgba(80,240,160,.75);
+  color: #50f0a0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(80,240,160,.20);
+}
+
+.buildChatApplyBtn:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.buildChatAppliedNote {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  color: rgba(80,240,160,.7);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 4px 0;
+}
+
+.buildChatInputRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.buildChatInputRow .chatInput {
+  flex: 1;
+}
+
+.buildChatSendBtn,
+.buildChatStopBtn {
+  font-family: "Barlow Condensed", Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 6px 20px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all .18s cubic-bezier(.34,1.56,.64,1);
+  white-space: nowrap;
+}
+
+.buildChatSendBtn {
+  border: 1px solid rgba(102,212,255,.4);
+  background: rgba(102,212,255,.1);
+  color: var(--cyan);
+}
+
+.buildChatSendBtn:hover:not(:disabled) {
+  background: rgba(102,212,255,.18);
+  border-color: var(--cyan);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(102,212,255,.18);
+}
+
+.buildChatSendBtn:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.buildChatStopBtn {
+  border: 1px solid rgba(255,100,80,.4);
+  background: rgba(255,100,80,.1);
+  color: rgba(255,120,100,.9);
+}
+
+.buildChatStopBtn:hover {
+  background: rgba(255,100,80,.18);
+  border-color: rgba(255,100,80,.7);
 }

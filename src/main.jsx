@@ -759,7 +759,6 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
   const historyRef = useRef(null);
   const rafRef = useRef(null);
   const fileInputRef = useRef(null);
-  const folderInputRef = useRef(null);
 
   useEffect(() => {
     if (!history.length) return;
@@ -771,35 +770,35 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
     return () => cancelAnimationFrame(rafRef.current);
   }, [history]);
 
-  async function handleFilePick(e, isFolder) {
+  async function handleFilePick(e) {
     const files = Array.from(e.target.files || []);
-    const filtered = isFolder
-      ? files.filter(f => {
-          const parts = f.webkitRelativePath.split('/');
-          if (parts.some(p => ATTACH_IGNORE.has(p) || (p.startsWith('.') && p !== '.'))) return false;
-          const ext = '.' + f.name.split('.').pop();
-          return ATTACH_EXTS.has(ext);
-        })
-      : files;
     let total = 0;
     const items = [];
-    for (const file of filtered.slice(0, 60)) {
+    for (const file of files.slice(0, 60)) {
       if (total >= MAX_TOTAL_BYTES) break;
       const raw = await readFileText(file);
       const content = raw.slice(0, MAX_FILE_BYTES);
-      const name = file.webkitRelativePath || file.name;
-      items.push({ name, content });
+      items.push({ name: file.name, content });
       total += content.length;
     }
     if (items.length) onAddFiles(items);
     e.target.value = '';
   }
 
+  async function handleFolderAdd() {
+    try {
+      const res = await fetch('/api/browse-folder');
+      const { path: folderPath } = await res.json();
+      if (!folderPath) return;
+      const name = folderPath.split(/[\\/]/).filter(Boolean).pop() || folderPath;
+      onAddFiles([{ name: name + '/', type: 'folder', path: folderPath }]);
+    } catch {}
+  }
+
   return (
     <Panel title="MAVERICK // ORCHESTRATOR" className="chatSessionPanel">
       {!permanent && <button type="button" className="chatCollapseBtn" onClick={onCollapse}>↙ COLLAPSE</button>}
-      <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => handleFilePick(e, false)} />
-      <input ref={folderInputRef} type="file" style={{ display: 'none' }} webkitdirectory="true" onChange={e => handleFilePick(e, true)} />
+      <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => handleFilePick(e)} />
       <div className="chatSessionHistory" ref={historyRef}>
         {history.length === 0 && <div className="chatSessionEmpty">No messages yet. Send a command below.</div>}
         {history.map((msg, i) => {
@@ -822,7 +821,7 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
             type="button"
             disabled={busy}
             onClick={() => setWorkflowMode(mode.id)}
-            className={`workflowBtn${workflowMode === mode.id ? ' active' : ''}${workflowMode === mode.id && mode.id === 'build' ? ' amber' : ''}`}
+            className={`workflowBtn${workflowMode === mode.id ? ` active ${mode.accent}` : ''}`}
           >
             {mode.label}
           </button>
@@ -831,8 +830,8 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
       {attachedFiles?.length > 0 && (
         <div className="attachChips">
           {attachedFiles.map((f, i) => (
-            <span key={i} className="attachChip">
-              <span className="attachChipLabel" title={f.name}>{f.name.split(/[\\/]/).pop()}</span>
+            <span key={i} className={`attachChip${f.type === 'folder' ? ' folderChip' : ''}`}>
+              <span className="attachChipLabel" title={f.path || f.name}>{f.type === 'folder' ? '📁 ' : ''}{f.name.split(/[\\/]/).filter(Boolean).pop() || f.name}{f.type === 'folder' ? '/' : ''}</span>
               <button type="button" className="attachChipRemove" onClick={() => onRemoveFile(i)}>×</button>
             </span>
           ))}
@@ -850,7 +849,7 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
         />
         <div className="chatSessionActions">
           <button type="button" className="attachBtn" onClick={() => fileInputRef.current?.click()} title="Attach files">⊕ FILES</button>
-          <button type="button" className="attachBtn" onClick={() => folderInputRef.current?.click()} title="Attach folder">⊕ FOLDER</button>
+          <button type="button" className="attachBtn" onClick={handleFolderAdd} title="Attach folder by path">⊕ FOLDER</button>
           {busy
             ? <button type="button" className="stopBtn" onClick={onStop}>[ STOP ]</button>
             : <button type="submit" className="sendBtn" disabled={!input.trim()}>SEND</button>
@@ -1095,6 +1094,200 @@ function OrchestratorPage({ modelStatus, chatSession }) {
       </Panel>
 
       {(error || orchestratorStatus.error) ? <div className="errorStrip">{error || orchestratorStatus.error}</div> : null}
+    </div>
+  );
+}
+
+function BuildChatPanel() {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [stagedId, setStagedId] = useState(null);
+  const [stagedFiles, setStagedFiles] = useState([]);
+  const [applyStatus, setApplyStatus] = useState('');
+  const abortRef = useRef(null);
+  const historyRef = useRef([]);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput('');
+    setStagedId(null);
+    setStagedFiles([]);
+    setApplyStatus('');
+
+    const userMsg = { role: 'user', content: text };
+    const pendingMsg = { role: 'assistant', content: '', statuses: [], qc: '', actions: [] };
+    setMessages(prev => [...prev, userMsg, pendingMsg]);
+    historyRef.current = [...historyRef.current, { role: 'user', content: text }].slice(-20);
+
+    setBusy(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let accum = '';
+    let qcAccum = '';
+
+    try {
+      const res = await fetch('/api/build-chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: text, history: historyRef.current.slice(0, -1) }),
+        signal: controller.signal
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') break;
+          try {
+            const evt = JSON.parse(raw);
+            setMessages(prev => {
+              const next = [...prev];
+              const last = { ...next[next.length - 1] };
+              if (evt.type === 'status') {
+                last.statuses = [...(last.statuses || []), evt.text];
+              } else if (evt.type === 'token') {
+                accum += evt.text;
+                last.content = accum;
+              } else if (evt.type === 'qc') {
+                qcAccum = evt.text;
+                last.qc = qcAccum;
+              } else if (evt.type === 'action') {
+                last.actions = [...(last.actions || []), evt];
+              } else if (evt.type === 'staged') {
+                setStagedId(evt.id);
+                setStagedFiles(evt.files || []);
+              }
+              next[next.length - 1] = last;
+              return next;
+            });
+          } catch {}
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setMessages(prev => {
+          const next = [...prev];
+          next[next.length - 1] = { ...next[next.length - 1], content: `[Error: ${err.message}]` };
+          return next;
+        });
+      }
+    } finally {
+      setBusy(false);
+      abortRef.current = null;
+      if (accum) {
+        historyRef.current = [...historyRef.current, { role: 'assistant', content: accum }].slice(-20);
+      }
+    }
+  }
+
+  async function handleApply() {
+    if (!stagedId) return;
+    setApplyStatus('Applying...');
+    try {
+      const r = await fetch('/api/build/apply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ stagedId })
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setApplyStatus(`Applied ${data.applied || stagedFiles.length} file(s).`);
+        setStagedId(null);
+      } else {
+        setApplyStatus(`Apply failed: ${data.error || r.status}`);
+      }
+    } catch (err) {
+      setApplyStatus(`Apply error: ${err.message}`);
+    }
+  }
+
+  return (
+    <div className="buildChatPage">
+      <div className="panel buildChatPanel">
+        <div className="panelTitle">BUILD CHAT — CLAUDE ARCHITECT → QWEN EXECUTOR → NIM QC</div>
+
+        <div className="buildChatHistory" ref={bottomRef}>
+          {messages.length === 0 && (
+            <div className="buildChatEmpty">Describe a code change — Claude plans, Qwen executes, NIM reviews.</div>
+          )}
+          {messages.map((msg, i) => (
+            <div key={i} className={`buildChatMsg ${msg.role}`}>
+              {msg.role === 'user' ? (
+                <>
+                  <span className="buildChatRole">CMD</span>
+                  <span className="buildChatText">{msg.content}</span>
+                </>
+              ) : (
+                <>
+                  <span className="buildChatRole">BUILD</span>
+                  <div className="buildChatBody">
+                    {(msg.statuses || []).map((s, si) => (
+                      <div key={si} className="buildChatStatus">{s}</div>
+                    ))}
+                    {(msg.actions || []).map((a, ai) => (
+                      <div key={ai} className={`buildChatAction ${a.ok ? 'ok' : 'err'}`}>
+                        {a.ok ? '✓' : '✗'} {a.tool}({a.path})
+                      </div>
+                    ))}
+                    {msg.content && <div className="buildChatContent"><MavMarkdown content={msg.content} /></div>}
+                    {msg.qc && (
+                      <div className="buildChatQc">
+                        <span className="buildChatQcLabel">NIM QC</span>
+                        <pre className="buildChatQcText">{msg.qc}</pre>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        {stagedId && (
+          <div className="buildChatStaged">
+            <span className="buildChatStagedLabel">STAGED: {stagedFiles.join(', ')}</span>
+            <button className="buildChatApplyBtn" onClick={handleApply} disabled={!!applyStatus}>
+              {applyStatus || 'APPLY TO WORKSPACE'}
+            </button>
+          </div>
+        )}
+        {!stagedId && applyStatus && (
+          <div className="buildChatAppliedNote">{applyStatus}</div>
+        )}
+
+        <form className="buildChatInputRow" onSubmit={handleSubmit}>
+          <input
+            className="chatInput"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Describe a code change..."
+            disabled={busy}
+            autoFocus
+          />
+          {busy
+            ? <button type="button" className="buildChatStopBtn" onClick={() => abortRef.current?.abort()}>STOP</button>
+            : <button type="submit" className="buildChatSendBtn" disabled={!input.trim()}>SEND</button>
+          }
+        </form>
+      </div>
     </div>
   );
 }
@@ -1457,10 +1650,9 @@ function HomePage({ modelStatus }) {
 }
 
 const WORKFLOW_MODES = [
-  { id: 'ask',    label: '[ ASK MAVERICK ]',    model: 'RAG'    },
-  { id: 'build',  label: '[ BUILD / FIX ]',     model: 'LOCAL'  },
-  { id: 'review', label: '[ REVIEW & REASON ]', model: 'GEMINI' },
-  { id: 'ops',    label: '[ OPS / DEBUG ]',     model: 'LOCAL'  },
+  { id: 'ask',   label: 'ASK MAVERICK',  accent: 'cyan'  },
+  { id: 'build', label: 'BUILD / FIX',   accent: 'amber' },
+  { id: 'ops',   label: 'OPERATIONS',    accent: 'green' },
 ];
 
 const MAV_RAG_URL = 'http://192.168.1.12:8181/estimate';
@@ -1602,6 +1794,7 @@ function App() {
     <DashboardViewContext.Provider value={[view, setView]}>
       <main className="dashboard" data-theme="ops-glass" data-theme-saved="Rugged-Ops Command">
         <TopBar status={status} modelStatus={modelStatus} />
+        <div className="pageWrapper" key={view}>
         {view === 'home' ? (
           <HomePage modelStatus={modelStatus} />
         ) : view === 'hardware' ? (
@@ -1651,6 +1844,7 @@ function App() {
             </div>
           </div>
         )}
+        </div>{/* /pageWrapper */}
 
         {view !== 'orchestrator' && <div className="commandBar">
           {chatPanelOpen && chatHistory.length > 0 && (
@@ -1681,7 +1875,7 @@ function App() {
                 type="button"
                 disabled={chatBusy}
                 onClick={() => setWorkflowMode(mode.id)}
-                className={`workflowBtn${workflowMode === mode.id ? ' active' : ''}${workflowMode === mode.id && mode.id === 'build' ? ' amber' : ''}`}
+                className={`workflowBtn${workflowMode === mode.id ? ` active ${mode.accent}` : ''}`}
               >
                 {mode.label}
               </button>
@@ -1701,8 +1895,8 @@ function App() {
           {attachedFiles.length > 0 && (
             <div className="attachChips barChips">
               {attachedFiles.map((f, i) => (
-                <span key={i} className="attachChip">
-                  <span className="attachChipLabel" title={f.name}>{f.name.split(/[\\/]/).pop()}</span>
+                <span key={i} className={`attachChip${f.type === 'folder' ? ' folderChip' : ''}`}>
+                  <span className="attachChipLabel" title={f.path || f.name}>{f.type === 'folder' ? '📁 ' : ''}{f.name.split(/[\\/]/).filter(Boolean).pop() || f.name}{f.type === 'folder' ? '/' : ''}</span>
                   <button type="button" className="attachChipRemove" onClick={() => setAttachedFiles(prev => prev.filter((_, idx) => idx !== i))}>×</button>
                 </span>
               ))}
