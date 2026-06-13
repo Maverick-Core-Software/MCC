@@ -16,6 +16,7 @@ module.exports = {
         MAV_REPO_BRIDGE_URL: 'http://127.0.0.1:8790',
         OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
         NVIDIA_NIM_API_KEY: process.env.NVIDIA_NIM_API_KEY || '',
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
