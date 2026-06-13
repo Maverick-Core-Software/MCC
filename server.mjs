@@ -1541,49 +1541,61 @@ function buildChatSseWrite(res, event) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-async function callClaude(messages, signal) {
-  const useGpt = !anthropicApiKey || anthropicApiKey.length < 10 || !anthropicApiKey.startsWith('sk-ant');
-  if (useGpt) {
-    // Fallback to GPT-4o when no Anthropic key
-    const gptMessages = [
-      { role: 'system', content: CLAUDE_ARCHITECT_SYSTEM },
-      ...messages
-    ];
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      signal,
-      headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${openAiApiKey}` },
-      body: JSON.stringify({ model: 'gpt-4o', messages: gptMessages, temperature: 0.2, max_tokens: 1024 })
-    });
-    if (!r.ok) throw new Error(`GPT-4o ${r.status}: ${await r.text().catch(() => '')}`);
-    const payload = await r.json();
-    const text = payload.choices?.[0]?.message?.content?.trim() || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error(`GPT-4o returned non-JSON: ${text.slice(0, 200)}`);
-    return JSON.parse(match[0]);
-  }
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+async function callGpt4o(messages, signal) {
+  const gptMessages = [
+    { role: 'system', content: CLAUDE_ARCHITECT_SYSTEM },
+    ...messages
+  ];
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     signal,
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': anthropicApiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: anthropicModel,
-      system: CLAUDE_ARCHITECT_SYSTEM,
-      messages,
-      max_tokens: 1024,
-      temperature: 0.2
-    })
+    headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${openAiApiKey}` },
+    body: JSON.stringify({ model: 'gpt-4o', messages: gptMessages, temperature: 0.2, max_tokens: 1024 })
   });
-  if (!r.ok) throw new Error(`Claude ${r.status}: ${await r.text().catch(() => '')}`);
+  if (!r.ok) throw new Error(`GPT-4o ${r.status}: ${await r.text().catch(() => '')}`);
   const payload = await r.json();
-  const text = payload.content?.[0]?.text?.trim() || '';
+  const text = payload.choices?.[0]?.message?.content?.trim() || '';
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`Claude returned non-JSON: ${text.slice(0, 200)}`);
+  if (!match) throw new Error(`GPT-4o returned non-JSON: ${text.slice(0, 200)}`);
   return JSON.parse(match[0]);
+}
+
+async function callClaude(messages, signal) {
+  const hasKey = anthropicApiKey && anthropicApiKey.length >= 10 && anthropicApiKey.startsWith('sk-ant');
+  if (!hasKey) return callGpt4o(messages, signal);
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: anthropicModel,
+        system: CLAUDE_ARCHITECT_SYSTEM,
+        messages,
+        max_tokens: 1024,
+        temperature: 0.2
+      })
+    });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => '');
+      console.warn(`[planner] Claude ${r.status} — falling back to GPT-4o: ${errText.slice(0, 120)}`);
+      return callGpt4o(messages, signal);
+    }
+    const payload = await r.json();
+    const text = payload.content?.[0]?.text?.trim() || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`Claude returned non-JSON: ${text.slice(0, 200)}`);
+    return JSON.parse(match[0]);
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
+    console.warn(`[planner] Claude error — falling back to GPT-4o: ${err.message}`);
+    return callGpt4o(messages, signal);
+  }
 }
 
 async function delegateWriteToQwen(task, staged, controller) {
