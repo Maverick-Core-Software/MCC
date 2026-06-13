@@ -23,7 +23,6 @@ import {
   smartLabel
 } from './lib/format.js';
 import SEOApprovalPage from './SEOApprovalPage.jsx';
-import ClientDashboard from './ClientDashboard.jsx';
 import { isDocumentResponse, MavMarkdown } from './mavUtils.js';
 import './styles.css';
 
@@ -1658,7 +1657,6 @@ const WORKFLOW_MODES = [
 const MAV_RAG_URL = 'http://192.168.1.12:8181/estimate';
 
 function App() {
-  const isClientMode = new URLSearchParams(window.location.search).has('client');
 
   const modelStatus = useModelStatus();
   const orchestratorStatus = useOrchestratorStatus();
@@ -1680,9 +1678,6 @@ function App() {
   const [attachedFiles, setAttachedFiles] = useState([]);
   const barFileInputRef = useRef(null);
 
-  if (isClientMode) {
-    return <ClientDashboard status={status} />;
-  }
 
   const activeMode = WORKFLOW_MODES.find(m => m.id === workflowMode) || WORKFLOW_MODES[0];
 
