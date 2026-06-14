@@ -635,19 +635,19 @@ function NetworkMapPage({ metrics }) {
       <Panel title="LIVE NETWORK MAP" className="mapPanel">
         <div className="topologyCanvas">
           {/* Tier zone labels */}
-          <div className="tierChip" style={{top: 10, left: 14}}>WAN / INTERNET</div>
-          <div className="tierChip" style={{top: 254, left: 14}}>SWITCH CORE</div>
-          <div className="tierChip" style={{top: 414, left: 14}}>ENDPOINTS</div>
+          <div className="tierChip" style={{top: 12, left: 14}}>WAN / INTERNET</div>
+          <div className="tierChip" style={{top: 374, left: 14}}>SWITCH CORE</div>
+          <div className="tierChip" style={{top: 530, left: 14}}>ENDPOINTS</div>
           {/* Horizontal tier dividers */}
-          <div className="tierDivider" style={{top: 238}} />
-          <div className="tierDivider" style={{top: 400}} />
+          <div className="tierDivider" style={{top: 362}} />
+          <div className="tierDivider" style={{top: 518}} />
           {/* Link speed labels */}
-          <div className="linkLabel" style={{top: 74, left: 'calc(50% + 120px)'}}>AT&T FIBER</div>
-          <div className="linkLabel" style={{top: 143, left: 'calc(50% + 120px)'}}>WAN UPLINK</div>
-          <div className="linkLabel" style={{top: 240, left: 'calc(50% + 120px)'}}>GW → CORE</div>
-          <div className="linkLabel" style={{top: 382, left: '28%'}}>P3 · 2.5 Gb</div>
-          <div className="linkLabel" style={{top: 400, left: 'calc(50% + 120px)'}}>P2 · 1 Gb</div>
-          <div className="linkLabel" style={{top: 382, right: '14%'}}>P1 · 2.5 Gb</div>
+          <div className="linkLabel" style={{top: 106, left: 'calc(50% + 120px)'}}>AT&T FIBER</div>
+          <div className="linkLabel" style={{top: 230, left: 'calc(50% + 120px)'}}>WAN UPLINK</div>
+          <div className="linkLabel" style={{top: 340, left: 'calc(50% + 120px)'}}>GW → CORE</div>
+          <div className="linkLabel" style={{top: 487, left: '28%'}}>P3 · 2.5 Gb</div>
+          <div className="linkLabel" style={{top: 487, left: 'calc(50% + 120px)'}}>P2 · 1 Gb</div>
+          <div className="linkLabel" style={{top: 487, right: '14%'}}>P1 · 2.5 Gb</div>
 
           <div className="mapNode isp">
             <span className="nodeTypeBadge">PROVIDER</span>
@@ -688,13 +688,13 @@ function NetworkMapPage({ metrics }) {
           </div>
           <div className={`mapNode workstationNode ${pcOnline ? 'online' : 'offline'}`}>
             <span className="nodeTypeBadge">WORKSTATION</span>
-            <span>Main Workstation</span>
+            <span>Workstation</span>
             <strong>Port 3 · 2.5 Gb</strong>
             <em>CPU {Math.round(clampPercent(metrics.pcCpu))}% / RAM {Math.round(clampPercent(metrics.pcRam))}%</em>
           </div>
           <div className={`mapNode serverNode ${serverOnline ? 'online' : 'offline'}`}>
             <span className="nodeTypeBadge">SERVER</span>
-            <span>HP ProDesk Server</span>
+            <span>Proxmox Server</span>
             <strong>Port 1 · 2.5 Gb</strong>
             <em>CPU {Math.round(clampPercent(metrics.serverCpu))}% / RAM {Math.round(clampPercent(metrics.serverRam))}%</em>
           </div>
@@ -705,21 +705,28 @@ function NetworkMapPage({ metrics }) {
             <em>Wireless Clients</em>
           </div>
 
-          <svg className="mapLines" viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
-            <path className={`staticLink ${gatewayClass}`} d="M500 62 L500 105" />
-            <path className={`staticLink ${gatewayClass}`} d="M500 150 L500 205" />
-            <path className={`staticLink ${gatewayClass}`} d="M500 220 L500 238" />
-            <path className={`staticLink ${pcOnline ? pcClass : 'danger'}`} d="M393 346 L393 386 L205 386 L205 410" />
-            <path className={`staticLink ${meshClass}`} d="M500 346 L500 438" />
-            <path className={`staticLink ${serverOnline ? serverClass : 'danger'}`} d="M607 346 L607 386 L795 386 L795 410" />
-            <path className={`flowLink ${gatewayClass}`} d="M500 62 L500 105" />
-            <path className={`flowLink ${gatewayClass}`} d="M500 150 L500 205" />
-            <path className={`flowLink ${gatewayClass}`} d="M500 220 L500 238" />
-            <path className={`flowLink ${pcOnline ? pcClass : 'danger'}`} d="M393 346 L393 386 L205 386 L205 410" />
-            <path className={`flowLink ${meshClass}`} d="M500 346 L500 438" />
-            <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M607 346 L607 386 L795 386 L795 410" />
-            <path className={`staticLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 410 L795 410" />
-            <path className={`flowLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 410 L795 410" />
+          <svg className="mapLines" viewBox="0 0 1000 640" preserveAspectRatio="none" aria-hidden="true">
+            {/* ISP → Internet */}
+            <path className={`staticLink ${gatewayClass}`} d="M500 93 L500 130" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 93 L500 130" />
+            {/* Internet → Router */}
+            <path className={`staticLink ${gatewayClass}`} d="M500 210 L500 248" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 210 L500 248" />
+            {/* Router → Switch */}
+            <path className={`staticLink ${gatewayClass}`} d="M500 330 L500 367" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 330 L500 367" />
+            {/* Switch → Workstation */}
+            <path className={`staticLink ${pcOnline ? pcClass : 'danger'}`} d="M393 477 L393 496 L205 496 L205 514" />
+            <path className={`flowLink ${pcOnline ? pcClass : 'danger'}`} d="M393 477 L393 496 L205 496 L205 514" />
+            {/* Switch → Mesh */}
+            <path className={`staticLink ${meshClass}`} d="M500 477 L500 514" />
+            <path className={`flowLink ${meshClass}`} d="M500 477 L500 514" />
+            {/* Switch → Server */}
+            <path className={`staticLink ${serverOnline ? serverClass : 'danger'}`} d="M607 477 L607 496 L795 496 L795 514" />
+            <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M607 477 L607 496 L795 496 L795 514" />
+            {/* Workstation ↔ Server LAN segment */}
+            <path className={`staticLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 556 L795 556" />
+            <path className={`flowLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 556 L795 556" />
           </svg>
         </div>
       </Panel>
@@ -727,9 +734,9 @@ function NetworkMapPage({ metrics }) {
         <div className="portRows">
           {[
             ['24', 'Gateway Router', 'ACTIVE', formatPortRate(metrics.switchPort24Rx, metrics.switchPort24Tx)],
-            ['1', 'HP ProDesk Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
+            ['1', 'Proxmox Server', serverOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort1Rx, metrics.switchPort1Tx)],
             ['2', 'x25 Deco Mesh', 'ACTIVE', formatPortRate(metrics.switchPort2Rx, metrics.switchPort2Tx)],
-            ['3', 'Main Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
+            ['3', 'Workstation', pcOnline ? 'ACTIVE' : 'DOWN', formatPortRate(metrics.switchPort3Rx, metrics.switchPort3Tx)],
             ['4-22', 'Available', 'IDLE', '-']
           ].map(([port, device, state, rate]) => (
             <div className="portRow" key={port}>
@@ -872,6 +879,7 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
             disabled={busy}
             onClick={() => setWorkflowMode(mode.id)}
             className={`workflowBtn${workflowMode === mode.id ? ` active ${mode.accent}` : ''}`}
+            data-tooltip={mode.tooltip}
           >
             {mode.label}
           </button>
@@ -1027,18 +1035,6 @@ function OrchestratorPage({ modelStatus, chatSession }) {
         onAddFiles={chatSession.onAddFiles}
         onRemoveFile={chatSession.onRemoveFile}
       />
-
-      <Panel title="WORKER ROUTER" className="workerRouter">
-        <div className="workerGrid">
-          {orchestratorStatus.workers.map((worker) => (
-            <div className="workerCard" key={worker.id}>
-              <span>{workerLabel(worker.id)}</span>
-              <strong>{worker.role}</strong>
-              <em>{worker.cost} / {worker.state}</em>
-            </div>
-          ))}
-        </div>
-      </Panel>
 
       <Panel title="MEMORY CONTEXT" className="memoryPanel">
         <div className="memorySummary">
@@ -1848,9 +1844,9 @@ function HomePage({ modelStatus }) {
 }
 
 const WORKFLOW_MODES = [
-  { id: 'ask',   label: 'ASK MAVERICK',  accent: 'cyan'  },
-  { id: 'build', label: 'BUILD / FIX',   accent: 'amber' },
-  { id: 'ops',   label: 'OPERATIONS',    accent: 'green' },
+  { id: 'ask',   label: 'ASK MAVERICK',  accent: 'cyan',  tooltip: 'Ask questions, request research, or check system status' },
+  { id: 'build', label: 'BUILD / FIX',   accent: 'amber', tooltip: 'Generate code, fix bugs, or build features with file context' },
+  { id: 'ops',   label: 'OPERATIONS',    accent: 'green', tooltip: 'Trigger pipelines, run agents, manage automation workflows' },
 ];
 
 const MAV_RAG_URL = 'http://192.168.1.12:8181/estimate';
@@ -2071,6 +2067,7 @@ function App() {
                 disabled={chatBusy}
                 onClick={() => setWorkflowMode(mode.id)}
                 className={`workflowBtn${workflowMode === mode.id ? ` active ${mode.accent}` : ''}`}
+                data-tooltip={mode.tooltip}
               >
                 {mode.label}
               </button>

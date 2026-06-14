@@ -5566,6 +5566,18 @@ code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
   padding: 12px !important;
 }
 
+/* Repositioned nodes with proper 40px gaps between each tier */
+.topologyCanvas { height: 700px !important; }
+.mapPanel       { min-height: 740px !important; }
+.portPanel      { min-height: 740px !important; }
+.isp            { top: 12px !important; }
+.internet       { top: 148px !important; min-height: 62px !important; }
+.router         { top: 280px !important; min-height: 68px !important; }
+.switch         { top: 400px !important; min-height: 110px !important; }
+.workstationNode{ top: 555px !important; left: 60px !important; }
+.serverNode     { top: 555px !important; right: 60px !important; }
+.meshNode       { top: 555px !important; bottom: auto !important; left: calc(50% - 105px) !important; }
+
 /* Topology node styling — more refined */
 .topoDevice {
   background: rgba(255,255,255,.04) !important;
@@ -5740,6 +5752,72 @@ code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
 .actionRow:hover, .reportRow:hover, .recentTaskRow:hover {
   background: rgba(255,255,255,.025) !important;
   border-radius: 5px !important;
+}
+
+/* ═══ HARDWARE CARD TEXT FIXES ════════════════════════════════════════════════ */
+/* Drive block — prevent 3-line name wrap, keep status badge on same row */
+.driveHead {
+  align-items: flex-start !important;
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+}
+.driveHead span {
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 13px !important;
+}
+.driveHead strong {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+/* Drive mount text — prevent 3-line wrap */
+.driveMeta em {
+  flex: 1 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 11px !important;
+}
+/* Spec strip — prevent "RTX 4060 Ti 16GB" wrapping */
+.hardwareSpecStrip strong {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+}
+
+/* ═══ WORKFLOW BUTTON TOOLTIPS ════════════════════════════════════════════════ */
+.workflowBtn[data-tooltip] {
+  position: relative !important;
+}
+.workflowBtn[data-tooltip]::after {
+  content: attr(data-tooltip) !important;
+  position: absolute !important;
+  bottom: calc(100% + 8px) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: #141824 !important;
+  border: 1px solid var(--r-border2) !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-size: 10px !important;
+  font-family: var(--r-mono) !important;
+  font-weight: 500 !important;
+  letter-spacing: .04em !important;
+  color: var(--r-text) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  transition: opacity var(--r-fast) var(--r-ease) !important;
+  z-index: 100 !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4) !important;
+}
+.workflowBtn[data-tooltip]:hover::after {
+  opacity: 1 !important;
 }
 
 /* Buttons in action rows */
