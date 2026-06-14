@@ -1364,8 +1364,8 @@ body {
 
 .hardwareGrid {
   grid-template-areas:
-    "workstation workstation workstation workstation workstation workstation server server server server server server"
-    "network network network network network network model model model model model model";
+    "network network network network network network server server server server server server"
+    "workstation workstation workstation workstation workstation workstation model model model model model model";
 }
 
 .hardwareGrid > .workstation { grid-area: workstation; }
