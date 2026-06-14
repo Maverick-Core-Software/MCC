@@ -279,17 +279,15 @@ function Workstation({ metrics }) {
         />
         <DriveBlock
           name="256GB Toshiba NVMe"
-          mount="INSTALLED / RAW"
+          mount="E: ARCHIVE"
           totalBytes={256060514304}
           healthText="HEALTHY"
-          note="No drive letter or filesystem yet"
         />
         <DriveBlock
           name="1TB WD-Black SN7100"
-          mount="PLANNED / BOTTOM NVME"
+          mount="D: STORAGE"
           totalBytes={1000204886016}
-          healthText="PENDING"
-          note="Install pending tonight"
+          healthText="HEALTHY"
         />
       </div>
       <div className="panelFooter">
