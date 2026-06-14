@@ -636,18 +636,18 @@ function NetworkMapPage({ metrics }) {
         <div className="topologyCanvas">
           {/* Tier zone labels */}
           <div className="tierChip" style={{top: 12, left: 14}}>WAN / INTERNET</div>
-          <div className="tierChip" style={{top: 374, left: 14}}>SWITCH CORE</div>
-          <div className="tierChip" style={{top: 530, left: 14}}>ENDPOINTS</div>
+          <div className="tierChip" style={{top: 378, left: 14}}>SWITCH CORE</div>
+          <div className="tierChip" style={{top: 528, left: 14}}>ENDPOINTS</div>
           {/* Horizontal tier dividers */}
-          <div className="tierDivider" style={{top: 362}} />
-          <div className="tierDivider" style={{top: 518}} />
+          <div className="tierDivider" style={{top: 374}} />
+          <div className="tierDivider" style={{top: 524}} />
           {/* Link speed labels */}
-          <div className="linkLabel" style={{top: 106, left: 'calc(50% + 120px)'}}>AT&T FIBER</div>
-          <div className="linkLabel" style={{top: 230, left: 'calc(50% + 120px)'}}>WAN UPLINK</div>
-          <div className="linkLabel" style={{top: 340, left: 'calc(50% + 120px)'}}>GW → CORE</div>
-          <div className="linkLabel" style={{top: 487, left: '28%'}}>P3 · 2.5 Gb</div>
-          <div className="linkLabel" style={{top: 487, left: 'calc(50% + 120px)'}}>P2 · 1 Gb</div>
-          <div className="linkLabel" style={{top: 487, right: '14%'}}>P1 · 2.5 Gb</div>
+          <div className="linkLabel" style={{top: 115, left: 'calc(50% + 120px)'}}>AT&T FIBER</div>
+          <div className="linkLabel" style={{top: 244, left: 'calc(50% + 120px)'}}>WAN UPLINK</div>
+          <div className="linkLabel" style={{top: 372, left: 'calc(50% + 120px)'}}>GW → CORE</div>
+          <div className="linkLabel" style={{top: 524, left: '28%'}}>P3 · 2.5 Gb</div>
+          <div className="linkLabel" style={{top: 524, left: 'calc(50% + 120px)'}}>P2 · 1 Gb</div>
+          <div className="linkLabel" style={{top: 524, right: '14%'}}>P1 · 2.5 Gb</div>
 
           <div className="mapNode isp">
             <span className="nodeTypeBadge">PROVIDER</span>
@@ -707,26 +707,26 @@ function NetworkMapPage({ metrics }) {
 
           <svg className="mapLines" viewBox="0 0 1000 640" preserveAspectRatio="none" aria-hidden="true">
             {/* ISP → Internet */}
-            <path className={`staticLink ${gatewayClass}`} d="M500 93 L500 130" />
-            <path className={`flowLink ${gatewayClass}`} d="M500 93 L500 130" />
+            <path className={`staticLink ${gatewayClass}`} d="M500 84 L500 117" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 84 L500 117" />
             {/* Internet → Router */}
-            <path className={`staticLink ${gatewayClass}`} d="M500 210 L500 248" />
-            <path className={`flowLink ${gatewayClass}`} d="M500 210 L500 248" />
+            <path className={`staticLink ${gatewayClass}`} d="M500 189 L500 222" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 189 L500 222" />
             {/* Router → Switch */}
-            <path className={`staticLink ${gatewayClass}`} d="M500 330 L500 367" />
-            <path className={`flowLink ${gatewayClass}`} d="M500 330 L500 367" />
+            <path className={`staticLink ${gatewayClass}`} d="M500 296 L500 329" />
+            <path className={`flowLink ${gatewayClass}`} d="M500 296 L500 329" />
             {/* Switch → Workstation */}
-            <path className={`staticLink ${pcOnline ? pcClass : 'danger'}`} d="M393 477 L393 496 L205 496 L205 514" />
-            <path className={`flowLink ${pcOnline ? pcClass : 'danger'}`} d="M393 477 L393 496 L205 496 L205 514" />
+            <path className={`staticLink ${pcOnline ? pcClass : 'danger'}`} d="M393 429 L393 441 L205 441 L205 461" />
+            <path className={`flowLink ${pcOnline ? pcClass : 'danger'}`} d="M393 429 L393 441 L205 441 L205 461" />
             {/* Switch → Mesh */}
-            <path className={`staticLink ${meshClass}`} d="M500 477 L500 514" />
-            <path className={`flowLink ${meshClass}`} d="M500 477 L500 514" />
+            <path className={`staticLink ${meshClass}`} d="M500 429 L500 539" />
+            <path className={`flowLink ${meshClass}`} d="M500 429 L500 539" />
             {/* Switch → Server */}
-            <path className={`staticLink ${serverOnline ? serverClass : 'danger'}`} d="M607 477 L607 496 L795 496 L795 514" />
-            <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M607 477 L607 496 L795 496 L795 514" />
+            <path className={`staticLink ${serverOnline ? serverClass : 'danger'}`} d="M607 429 L607 441 L795 441 L795 461" />
+            <path className={`flowLink ${serverOnline ? serverClass : 'danger'}`} d="M607 429 L607 441 L795 441 L795 461" />
             {/* Workstation ↔ Server LAN segment — U-route below Deco Mesh */}
-            <path className={`staticLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 551 L205 614 L795 614 L795 551" />
-            <path className={`flowLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 551 L205 614 L795 614 L795 551" />
+            <path className={`staticLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 494 L205 616 L795 616 L795 494" />
+            <path className={`flowLink ${serverOnline && pcOnline ? 'good' : 'danger'}`} d="M205 494 L205 616 L795 616 L795 494" />
           </svg>
         </div>
       </Panel>
