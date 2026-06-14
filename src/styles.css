@@ -2369,20 +2369,16 @@ body {
   .workstation,
   .modelOps,
   .network,
-  .server,
-  .services,
-  .storage {
+  .server {
     grid-column: 1 / -1;
   }
 
   .hardwareGrid {
     grid-template-areas:
-      "workstation"
-      "model"
       "network"
       "server"
-      "storage"
-      "services";
+      "workstation"
+      "model";
   }
 
   .gaugeRow,
@@ -5588,6 +5584,13 @@ code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
 .topologyCanvas { height: 780px !important; }
 .mapPanel       { min-height: 820px !important; }
 .portPanel      { min-height: 820px !important; }
+
+@media (max-width: 980px) {
+  .mapPage        { grid-template-columns: 1fr !important; }
+  .topologyCanvas { height: 480px !important; }
+  .mapPanel       { min-height: 520px !important; }
+  .portPanel      { min-height: auto !important; }
+}
 .isp            { top: 12px !important; }
 .internet       { top: 110px !important; min-height: 62px !important; }
 .router         { top: 196px !important; min-height: 68px !important; }
