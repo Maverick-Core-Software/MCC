@@ -175,8 +175,8 @@ function Sidebar({ status, modelStatus }) {
   return (
     <aside className="sidebar">
       <div className="sidebarLogo">
-        <span className="sidebarLogoMark">M</span>
-        <span className="sidebarLogoText">MCC</span>
+        <img src="/assets/maverick-core-commander-logo.png" alt="Maverick Core Commander" className="sidebarLogoImg" />
+        <span className="sidebarLogoCollapsed">M</span>
       </div>
 
       <nav className="sidebarNav" aria-label="Dashboard view">
@@ -188,25 +188,34 @@ function Sidebar({ status, modelStatus }) {
           >
             <span className="sidebarNavIcon">{item.icon}</span>
             <span className="sidebarNavLabel">{item.label}</span>
+            {item.badge && <span className="sidebarNavBadge" />}
           </button>
         ))}
       </nav>
 
       <div className="sidebarFooter">
-        <div className="sidebarStatus">
-          <span className={`sidebarStatusDot ${status.state === 'online' ? 'online' : 'offline'}`} />
-          <span className="sidebarStatusText">{time} · Prometheus</span>
-        </div>
-        <div className={`sidebarModel ${modelStatus.state}`}>
-          <span className={`sidebarStatusDot ${modelStatus.state === 'online' ? 'online' : 'offline'}`} />
-          <div>
-            <div className="sidebarModelName">{compactModelName(modelStatus.model)}</div>
-            <div className="sidebarModelSub">{modelStatus.state === 'online' ? 'Online' : 'Offline'} · Local</div>
+        <div className="sidebarSystemStatus">
+          <div className={`sidebarStatusRow ${status.state === 'online' ? 'online' : 'offline'}`}>
+            <span className="sidebarStatusDot" />
+            <div className="sidebarStatusInfo">
+              <span className="sidebarStatusLabel">PROMETHEUS</span>
+              <span className="sidebarStatusValue">{time}</span>
+            </div>
           </div>
-        </div>
-        <div className={`sidebarDeploy ${deployOk ? 'online' : 'offline'}`}>
-          <span className={`sidebarStatusDot ${deployOk ? 'online' : 'offline'}`} />
-          <span className="sidebarDeployText">Deploy {deployOk ? 'OK' : '…'}</span>
+          <div className={`sidebarStatusRow ${modelStatus.state === 'online' ? 'online' : 'offline'}`}>
+            <span className="sidebarStatusDot" />
+            <div className="sidebarStatusInfo">
+              <span className="sidebarStatusLabel">LOCAL MODEL</span>
+              <span className="sidebarStatusValue">{compactModelName(modelStatus.model)}</span>
+            </div>
+          </div>
+          <div className={`sidebarStatusRow ${deployOk ? 'online' : 'offline'}`}>
+            <span className="sidebarStatusDot" />
+            <div className="sidebarStatusInfo">
+              <span className="sidebarStatusLabel">DEPLOY</span>
+              <span className="sidebarStatusValue">{deployOk ? 'OK' : 'CHECKING…'}</span>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
@@ -625,19 +634,38 @@ function NetworkMapPage({ metrics }) {
     <div className="mapPage">
       <Panel title="LIVE NETWORK MAP" className="mapPanel">
         <div className="topologyCanvas">
+          {/* Tier zone labels */}
+          <div className="tierChip" style={{top: 10, left: 14}}>WAN / INTERNET</div>
+          <div className="tierChip" style={{top: 254, left: 14}}>SWITCH CORE</div>
+          <div className="tierChip" style={{top: 414, left: 14}}>ENDPOINTS</div>
+          {/* Horizontal tier dividers */}
+          <div className="tierDivider" style={{top: 238}} />
+          <div className="tierDivider" style={{top: 400}} />
+          {/* Link speed labels */}
+          <div className="linkLabel" style={{top: 74, left: 'calc(50% + 120px)'}}>AT&T FIBER</div>
+          <div className="linkLabel" style={{top: 143, left: 'calc(50% + 120px)'}}>WAN UPLINK</div>
+          <div className="linkLabel" style={{top: 240, left: 'calc(50% + 120px)'}}>GW → CORE</div>
+          <div className="linkLabel" style={{top: 382, left: '28%'}}>P3 · 2.5 Gb</div>
+          <div className="linkLabel" style={{top: 400, left: 'calc(50% + 120px)'}}>P2 · 1 Gb</div>
+          <div className="linkLabel" style={{top: 382, right: '14%'}}>P1 · 2.5 Gb</div>
+
           <div className="mapNode isp">
+            <span className="nodeTypeBadge">PROVIDER</span>
             <span>2.5Gb AT&T Fiber</span>
             <strong>ISP LINK</strong>
           </div>
           <div className="mapNode internet">
+            <span className="nodeTypeBadge">CLOUD</span>
             <span>Internet</span>
             <strong>WAN</strong>
           </div>
           <div className="mapNode router">
+            <span className="nodeTypeBadge">GATEWAY</span>
             <span>Gateway Router</span>
             <strong>{gatewayRate} DOWN</strong>
           </div>
           <div className="mapNode switch">
+            <span className="nodeTypeBadge">CORE SWITCH</span>
             <span>10Gb Network Switch</span>
             <strong>24 PORT</strong>
             <div className="mapPorts">
@@ -659,18 +687,21 @@ function NetworkMapPage({ metrics }) {
             <span className={`portAnchor port24 ${gatewayClass}`} title="Port 24" />
           </div>
           <div className={`mapNode workstationNode ${pcOnline ? 'online' : 'offline'}`}>
+            <span className="nodeTypeBadge">WORKSTATION</span>
             <span>Main Workstation</span>
-            <strong>Port 3 / 2.5Gb</strong>
+            <strong>Port 3 · 2.5 Gb</strong>
             <em>CPU {Math.round(clampPercent(metrics.pcCpu))}% / RAM {Math.round(clampPercent(metrics.pcRam))}%</em>
           </div>
           <div className={`mapNode serverNode ${serverOnline ? 'online' : 'offline'}`}>
+            <span className="nodeTypeBadge">SERVER</span>
             <span>HP ProDesk Server</span>
-            <strong>Port 1 / 2.5Gb</strong>
+            <strong>Port 1 · 2.5 Gb</strong>
             <em>CPU {Math.round(clampPercent(metrics.serverCpu))}% / RAM {Math.round(clampPercent(metrics.serverRam))}%</em>
           </div>
           <div className="mapNode meshNode">
+            <span className="nodeTypeBadge">WIRELESS AP</span>
             <span>x25 Deco Mesh</span>
-            <strong>Port 2 / 1Gb</strong>
+            <strong>Port 2 · 1 Gb</strong>
             <em>Wireless Clients</em>
           </div>
 

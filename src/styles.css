@@ -5125,29 +5125,33 @@ body {
 .folderPickerConfirm:hover { background: rgba(0,200,255,.22); border-color: rgba(0,200,255,.5); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   REDESIGN OVERRIDES — Premium UI
+   REDESIGN OVERRIDES — Premium UI v2
    All rules here supersede the legacy styles above.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 :root {
-  --r-bg:       #09090b;
-  --r-panel:    #0d1117;
-  --r-card:     #111827;
-  --r-border:   #1e2030;
-  --r-border2:  #2a2f45;
-  --r-text:     #e2e8f0;
-  --r-sub:      #64748b;
-  --r-muted:    #334155;
-  --r-ac:       #06b6d4;
-  --r-ac-dim:   rgba(6,182,212,.1);
-  --r-ac-border:rgba(6,182,212,.2);
-  --r-green:    #10b981;
-  --r-red:      #ef4444;
-  --r-amber:    #f59e0b;
-  --r-sidebar:  220px;
-  --r-mono:     'JetBrains Mono', 'Fira Mono', monospace;
+  --r-bg:        #09090b;
+  --r-panel:     #0d1117;
+  --r-card:      #111827;
+  --r-border:    rgba(255,255,255,.07);
+  --r-border2:   rgba(255,255,255,.12);
+  --r-text:      #e2e8f0;
+  --r-sub:       #64748b;
+  --r-muted:     #334155;
+  --r-ac:        #06b6d4;
+  --r-ac-dim:    rgba(6,182,212,.08);
+  --r-ac-border: rgba(6,182,212,.25);
+  --r-ac-glow:   rgba(6,182,212,.15);
+  --r-green:     #10b981;
+  --r-red:       #ef4444;
+  --r-amber:     #f59e0b;
+  --r-sidebar:   224px;
+  --r-mono:      'JetBrains Mono', 'Fira Mono', monospace;
+  --r-ease:      cubic-bezier(.4,0,.2,1);
+  --r-fast:      140ms;
+  --r-mid:       220ms;
 }
 
 /* ── Reset legacy body/dashboard layout ── */
@@ -5176,7 +5180,7 @@ body {
   overflow-y: auto;
 }
 
-/* ── Sidebar ── */
+/* ═══ SIDEBAR ═══════════════════════════════════════════════════════════════ */
 .sidebar {
   width: var(--r-sidebar);
   min-width: var(--r-sidebar);
@@ -5192,40 +5196,37 @@ body {
   flex-shrink: 0;
 }
 
+/* Logo: show real image, hide collapsed text */
 .sidebarLogo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 18px 14px 14px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid var(--r-border);
+  min-height: 62px;
+  overflow: hidden;
 }
-
-.sidebarLogoMark {
-  width: 28px;
-  height: 28px;
-  background: var(--r-ac);
-  color: #000;
+.sidebarLogoImg {
+  width: 160px;
+  height: auto;
+  max-height: 40px;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+  opacity: .92;
+  filter: brightness(1.05) saturate(1.1);
+}
+.sidebarLogoCollapsed {
+  display: none;
+  font-size: 18px;
   font-weight: 800;
-  font-size: 14px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--r-mono);
-  flex-shrink: 0;
-}
-
-.sidebarLogoText {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .12em;
-  color: var(--r-text);
+  color: var(--r-ac);
   font-family: var(--r-mono);
 }
 
+/* Nav */
 .sidebarNav {
   flex: 1;
-  padding: 8px;
+  padding: 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5236,31 +5237,37 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 9px 10px;
+  border-radius: 7px;
   border: 1px solid transparent;
   background: none;
   color: var(--r-sub);
   cursor: pointer;
   font-size: 13px;
   font-family: system-ui, sans-serif;
-  transition: background .12s, color .12s, border-color .12s;
+  font-weight: 500;
+  transition: background var(--r-fast) var(--r-ease),
+              color var(--r-fast) var(--r-ease),
+              border-color var(--r-fast) var(--r-ease),
+              transform var(--r-fast) var(--r-ease);
   text-align: left;
   width: 100%;
   letter-spacing: normal;
   text-transform: none;
+  position: relative;
 }
-
 .sidebarNavItem:hover {
   background: var(--r-border);
   color: var(--r-text);
+  transform: translateX(2px);
 }
-
 .sidebarNavItem.active {
   background: var(--r-ac-dim);
   color: var(--r-ac);
   border-color: var(--r-ac-border);
+  box-shadow: inset 3px 0 0 var(--r-ac);
 }
+.sidebarNavItem.active .sidebarNavIcon svg { filter: drop-shadow(0 0 4px var(--r-ac-glow)); }
 
 .sidebarNavIcon {
   width: 16px;
@@ -5268,29 +5275,41 @@ body {
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  transition: color var(--r-fast) var(--r-ease);
+}
+.sidebarNavLabel { flex: 1; }
+.sidebarNavBadge {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--r-ac);
+  box-shadow: 0 0 6px var(--r-ac);
+  flex-shrink: 0;
 }
 
-.sidebarNavLabel {
-  flex: 1;
-  font-weight: 500;
-}
-
+/* Footer status rows */
 .sidebarFooter {
-  padding: 12px;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--r-border);
+}
+.sidebarSystemStatus {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
-
-.sidebarStatus {
+.sidebarStatusRow {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-family: var(--r-mono);
-  color: var(--r-sub);
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid var(--r-border);
+  transition: background var(--r-fast) var(--r-ease);
+  overflow: hidden;
 }
+.sidebarStatusRow.online .sidebarStatusDot { background: var(--r-green); box-shadow: 0 0 5px var(--r-green); }
+.sidebarStatusRow.offline .sidebarStatusDot { background: var(--r-red); }
 
 .sidebarStatusDot {
   width: 6px;
@@ -5298,17 +5317,25 @@ body {
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--r-muted);
+  background: var(--r-muted);
 }
-.sidebarStatusDot.online { background: var(--r-green); }
-.sidebarStatusDot.offline { background: var(--r-red); }
 
-.sidebarModel {
+.sidebarStatusInfo {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
 }
-
-.sidebarModelName {
+.sidebarStatusLabel {
+  font-size: 9px;
+  font-family: var(--r-mono);
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--r-sub);
+  text-transform: uppercase;
+}
+.sidebarStatusValue {
   font-size: 11px;
   font-family: var(--r-mono);
   color: var(--r-text);
@@ -5317,95 +5344,212 @@ body {
   text-overflow: ellipsis;
 }
 
-.sidebarModelSub { font-size: 10px; color: var(--r-sub); }
-
-.sidebarDeploy {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-family: var(--r-mono);
-  color: var(--r-sub);
-}
-
-.sidebarDeployText { color: var(--r-sub); }
-.sidebarDeploy.online .sidebarDeployText { color: var(--r-green); }
-.sidebarDeploy.offline .sidebarDeployText { color: var(--r-red); }
-
-/* ── Hide legacy top bar ── */
+/* ── Hide legacy top bar + view toggle ── */
 .topBar { display: none !important; }
+.viewToggle { display: none !important; }
 
-/* ── Page content area ── */
+/* ═══ PAGE LAYOUT ════════════════════════════════════════════════════════════ */
 .pageWrapper {
-  padding: 24px 28px;
-  max-width: 1100px;
+  padding: 20px 24px 24px !important;
+  animation: pageEnter var(--r-mid) var(--r-ease) both;
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Panels: clean flat style ── */
-.Panel,
-[class*="panel"],
-[class*="Panel"] {
+.homePage { gap: 14px !important; }
+.mainGrid, .hardwareGrid { gap: 14px !important; }
+
+/* ═══ PANELS ═════════════════════════════════════════════════════════════════ */
+
+/* Kill all Barlow Condensed / gamer typography */
+* { font-family: system-ui, -apple-system, sans-serif; }
+code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
+.workflowBtn, .modelRouteBadge, .chatRole,
+.sidebarStatusLabel, .sidebarStatusValue { font-family: var(--r-mono) !important; }
+
+/* Panel: clean flat card — NO overflow:hidden (breaks gauge canvas) */
+.panel {
   background: var(--r-panel) !important;
+  border: 1px solid var(--r-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.4) !important;
+  padding: 0 !important;
+  position: relative !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              box-shadow var(--r-fast) var(--r-ease) !important;
+}
+.panel::before, .panel::after { display: none !important; }
+.panel:hover {
+  border-color: var(--r-border2) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.45) !important;
+}
+
+/* Panel title: flat mono header */
+.panelTitle {
+  position: relative !important;
+  z-index: 1 !important;
+  top: auto !important;
+  left: auto !important;
+  padding: 10px 14px !important;
+  border-bottom: 1px solid var(--r-border) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  font-family: var(--r-mono) !important;
+  text-transform: uppercase !important;
+  letter-spacing: .1em !important;
+  color: var(--r-sub) !important;
+  text-shadow: none !important;
+  background: none !important;
+}
+.panelTitle::before, .panelTitle::after { display: none !important; }
+
+/* Gauge cards */
+.gaugeShell {
+  background: rgba(255,255,255,.025) !important;
   border: 1px solid var(--r-border) !important;
   border-radius: 8px !important;
   box-shadow: none !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              background var(--r-fast) var(--r-ease) !important;
+}
+.gaugeShell:hover {
+  background: rgba(255,255,255,.04) !important;
+  border-color: var(--r-border2) !important;
 }
 
-.panelTitle,
-.panelHeader,
-[class*="panelTitle"],
-[class*="PanelTitle"] {
+/* Hero stat cells */
+.homeHeroGrid {
+  gap: 10px !important;
+  padding: 14px !important;
+}
+.homeHeroGrid > div {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid var(--r-border) !important;
+  border-radius: 8px !important;
+  padding: 12px 14px !important;
+  min-width: 0 !important;
+  transition: background var(--r-fast) var(--r-ease),
+              border-color var(--r-fast) var(--r-ease) !important;
+}
+.homeHeroGrid > div:hover {
+  background: rgba(255,255,255,.04) !important;
+  border-color: var(--r-border2) !important;
+}
+.homeHeroGrid > div > span {
+  display: block !important;
+  font-size: 9px !important;
   font-family: var(--r-mono) !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   text-transform: uppercase !important;
-  letter-spacing: .08em !important;
+  letter-spacing: .1em !important;
   color: var(--r-sub) !important;
+  margin-bottom: 5px !important;
+}
+.homeHeroGrid > div > strong {
+  display: block !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  color: var(--r-text) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.15 !important;
+}
+.homeHeroGrid > div > em {
+  display: block !important;
+  font-size: 10px !important;
+  font-style: normal !important;
+  color: var(--r-sub) !important;
+  margin-top: 3px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
-/* ── Command bar: slimmer, cleaner ── */
+/* ═══ COMMAND BAR ════════════════════════════════════════════════════════════ */
 .commandBar {
-  background: var(--r-panel) !important;
+  background: rgba(13,17,23,.96) !important;
   border-top: 1px solid var(--r-border) !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
-  padding: 10px 16px !important;
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 50;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.4) !important;
+  padding: 10px 18px !important;
+  position: sticky !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 50 !important;
+  backdrop-filter: blur(12px) !important;
 }
 
 .chatInput {
-  background: var(--r-card) !important;
+  background: rgba(255,255,255,.04) !important;
   border: 1px solid var(--r-border) !important;
-  border-radius: 6px !important;
+  border-radius: 7px !important;
   color: var(--r-text) !important;
   font-size: 13px !important;
   font-family: system-ui !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              background var(--r-fast) var(--r-ease) !important;
 }
-.chatInput:focus { border-color: var(--r-ac) !important; outline: none !important; }
+.chatInput:focus {
+  border-color: var(--r-ac) !important;
+  background: rgba(6,182,212,.04) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(6,182,212,.1) !important;
+}
+.chatInput:hover:not(:focus) {
+  background: rgba(255,255,255,.06) !important;
+  border-color: var(--r-border2) !important;
+}
 
-.sendBtn, .stopBtn {
+.sendBtn {
   background: var(--r-ac) !important;
   color: #000 !important;
-  border-color: transparent !important;
-  border-radius: 6px !important;
+  border: none !important;
+  border-radius: 7px !important;
   font-weight: 700 !important;
   font-size: 12px !important;
+  transition: background var(--r-fast) var(--r-ease),
+              transform var(--r-fast) var(--r-ease),
+              box-shadow var(--r-fast) var(--r-ease) !important;
 }
-.stopBtn { background: var(--r-red) !important; }
+.sendBtn:hover:not(:disabled) {
+  background: #08d4f5 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(6,182,212,.3) !important;
+}
+.sendBtn:active:not(:disabled) { transform: translateY(0) !important; }
+
+.stopBtn {
+  background: var(--r-red) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 7px !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  transition: background var(--r-fast) var(--r-ease) !important;
+}
+.stopBtn:hover { background: #f87171 !important; }
 
 .workflowBtn {
-  border-radius: 4px !important;
-  font-size: 11px !important;
+  border-radius: 5px !important;
+  font-size: 10px !important;
   font-family: var(--r-mono) !important;
   font-weight: 700 !important;
-  letter-spacing: .06em !important;
+  letter-spacing: .07em !important;
   border: 1px solid var(--r-border) !important;
   color: var(--r-sub) !important;
   background: none !important;
+  transition: background var(--r-fast) var(--r-ease),
+              color var(--r-fast) var(--r-ease),
+              border-color var(--r-fast) var(--r-ease) !important;
+}
+.workflowBtn:hover:not(:disabled) {
+  background: rgba(255,255,255,.06) !important;
+  color: var(--r-text) !important;
+  border-color: var(--r-border2) !important;
 }
 .workflowBtn.active {
   background: var(--r-ac-dim) !important;
@@ -5413,130 +5557,226 @@ body {
   border-color: var(--r-ac-border) !important;
 }
 
-/* ── Gauge cards: remove glow, use flat style ── */
-.gaugeShell {
-  background: var(--r-panel) !important;
-  border: 1px solid var(--r-border) !important;
-  border-radius: 8px !important;
-  box-shadow: none !important;
+/* ═══ NETWORK MAP IMPROVEMENTS ═══════════════════════════════════════════════ */
+.mapPage {
+  display: grid !important;
+  gap: 14px !important;
 }
-
-/* ── Home page metrics ── */
-.homeHeroGrid > div {
-  background: var(--r-panel) !important;
-  border: 1px solid var(--r-border) !important;
-  border-radius: 8px !important;
-  box-shadow: none !important;
-}
-
-/* ── Kill all Barlow Condensed / gamer typography ── */
-* { font-family: system-ui, -apple-system, sans-serif; }
-code, pre, .gaugeValue, .gaugeLabel, .gaugeSub,
-.sidebarLogoText, .sidebarModelName, .sidebarStatus,
-.sidebarDeploy, .panelTitle, .workflowBtn, .modelRouteBadge,
-.chatRole, .clockBlock { font-family: var(--r-mono) !important; }
-
-/* ── Panel title: clean flat header ── */
-.panelTitle {
-  position: relative !important;
-  z-index: auto !important;
-  top: auto !important;
-  left: auto !important;
-  padding: 10px 14px !important;
-  border-bottom: 1px solid var(--r-border) !important;
-  border-left: none !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  font-family: var(--r-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: .08em !important;
-  color: var(--r-sub) !important;
-  text-shadow: none !important;
-  background: none !important;
-}
-.panelTitle::before, .panelTitle::after { display: none !important; }
-
-/* ── Panel: clean flat card ── */
-.panel {
-  background: var(--r-panel) !important;
-  border: 1px solid var(--r-border) !important;
-  border-radius: 8px !important;
-  box-shadow: none !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-  position: relative !important;
-}
-.panel::before, .panel::after { display: none !important; }
-
-/* ── View toggle (keep for any fallback use) ── */
-.viewToggle { display: none !important; }
-
-/* ── Scrollbar refinement ── */
-.dashboard::-webkit-scrollbar { width: 6px; }
-.dashboard::-webkit-scrollbar-track { background: transparent; }
-.dashboard::-webkit-scrollbar-thumb { background: var(--r-border); border-radius: 3px; }
-.dashboard::-webkit-scrollbar-thumb:hover { background: var(--r-border2); }
-
-/* ── Responsive: collapse sidebar to icons at ≤768px ── */
-@media (max-width: 768px) {
-  .sidebar { width: 52px; min-width: 52px; }
-  .sidebarLogoText, .sidebarNavLabel, .sidebarModelName,
-  .sidebarModelSub, .sidebarStatusText, .sidebarDeployText { display: none; }
-  .sidebarLogo { justify-content: center; padding: 14px 8px; }
-  .sidebarNavItem { justify-content: center; padding: 10px 8px; }
-  .sidebarFooter { align-items: center; padding: 8px; }
-  .sidebarModel, .sidebarStatus, .sidebarDeploy { justify-content: center; }
-}
-
-/* ── Page wrapper padding ── */
-.pageWrapper {
-  padding: 16px 20px 0 !important;
-}
-.homePage { gap: 12px !important; }
-.mainGrid, .hardwareGrid { gap: 12px !important; }
-
-/* ── Hero grid: fix overflow, keep 5-col layout ── */
-.homeHeroGrid {
-  gap: 10px !important;
+.hardwareNetworkMapPanel {
   padding: 12px !important;
 }
-.homeHeroGrid > div {
-  padding: 10px 12px !important;
-  overflow: hidden !important;
-  min-width: 0 !important;
+
+/* Topology node styling — more refined */
+.topoDevice {
+  background: rgba(255,255,255,.04) !important;
+  border: 1px solid var(--r-border) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              box-shadow var(--r-fast) var(--r-ease) !important;
 }
-.homeHeroGrid > div > strong {
-  font-size: 20px !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  display: block !important;
+.topoDevice:hover {
+  border-color: var(--r-border2) !important;
+  box-shadow: 0 0 14px rgba(6,182,212,.08) !important;
 }
-.homeHeroGrid > div > em {
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  display: block !important;
-  font-style: normal !important;
+.topoDevice.online,
+.topoDevice.pcDevice.online,
+.topoDevice.serverDevice.online {
+  border-color: rgba(16,185,129,.3) !important;
+}
+.topoDevice.offline,
+.topoDevice.pcDevice.offline,
+.topoDevice.serverDevice.offline {
+  border-color: rgba(239,68,68,.3) !important;
+  opacity: .7 !important;
+}
+.gatewayDevice {
+  border-color: var(--r-ac-border) !important;
+  box-shadow: 0 0 12px rgba(6,182,212,.08) !important;
 }
 
-/* ── Panel list toolbar ── */
+/* Port map rows */
+.hardwarePortRow, .portRow {
+  background: rgba(255,255,255,.02) !important;
+  border: 1px solid var(--r-border) !important;
+  border-radius: 6px !important;
+  transition: background var(--r-fast) var(--r-ease),
+              border-color var(--r-fast) var(--r-ease) !important;
+  padding: 7px 10px !important;
+}
+.hardwarePortRow:hover, .portRow:hover {
+  background: rgba(255,255,255,.05) !important;
+  border-color: var(--r-border2) !important;
+}
+
+/* Map nodes */
+.mapNode {
+  background: rgba(255,255,255,.04) !important;
+  border: 1px solid var(--r-border) !important;
+  border-radius: 8px !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              box-shadow var(--r-fast) var(--r-ease) !important;
+}
+.mapNode.online  {
+  border-color: rgba(16,185,129,.4) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(16,185,129,.15), 0 8px 24px rgba(0,0,0,.3) !important;
+}
+.mapNode.offline {
+  border-color: rgba(239,68,68,.45) !important;
+  opacity: .65 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 0 0 1px rgba(239,68,68,.18) !important;
+}
+.mapNode:hover   { box-shadow: 0 0 20px rgba(6,182,212,.12) !important; border-color: var(--r-ac-border) !important; }
+
+/* Node type badge chip */
+.nodeTypeBadge {
+  display: inline-block !important;
+  font-family: var(--r-mono) !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase !important;
+  color: var(--r-ac) !important;
+  background: rgba(6,182,212,.1) !important;
+  border: 1px solid rgba(6,182,212,.2) !important;
+  border-radius: 4px !important;
+  padding: 2px 7px !important;
+  margin-bottom: 4px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Tier zone labels */
+.tierChip {
+  position: absolute !important;
+  z-index: 3 !important;
+  font-family: var(--r-mono) !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: rgba(255,255,255,.2) !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+/* Tier horizontal dividers */
+.tierDivider {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 1px !important;
+  background: rgba(255,255,255,.04) !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+/* Link speed labels */
+.linkLabel {
+  position: absolute !important;
+  z-index: 3 !important;
+  font-family: var(--r-mono) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  color: rgba(255,255,255,.28) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+/* ═══ PANEL LIST / TOOLBAR ═══════════════════════════════════════════════════ */
 .panelListToolbar {
   border-bottom: 1px solid var(--r-border) !important;
   font-size: 11px !important;
   color: var(--r-sub) !important;
-  padding: 6px 14px !important;
+  padding: 7px 14px !important;
 }
 .panelListToolbar button {
   background: none !important;
   border: 1px solid var(--r-border) !important;
   color: var(--r-sub) !important;
-  border-radius: 4px !important;
+  border-radius: 5px !important;
   padding: 2px 8px !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   cursor: pointer !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              color var(--r-fast) var(--r-ease) !important;
+}
+.panelListToolbar button:hover:not(:disabled) {
+  border-color: var(--r-ac) !important;
+  color: var(--r-ac) !important;
+}
+.compactList { padding: 4px 14px 10px !important; }
+.emptyPlan   { color: var(--r-sub) !important; font-size: 12px !important; padding: 8px 0 !important; }
+
+/* Drive blocks */
+.driveBlock {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid var(--r-border) !important;
+  border-radius: 7px !important;
+  transition: background var(--r-fast) var(--r-ease),
+              border-color var(--r-fast) var(--r-ease) !important;
+}
+.driveBlock:hover {
+  background: rgba(255,255,255,.04) !important;
+  border-color: var(--r-border2) !important;
 }
 
-/* ── Compact list padding ── */
-.compactList { padding: 4px 14px 10px !important; }
-.emptyPlan { color: var(--r-sub) !important; font-size: 12px !important; }
+/* Service rows */
+.serviceRow {
+  border-bottom: 1px solid var(--r-border) !important;
+  transition: background var(--r-fast) var(--r-ease) !important;
+}
+.serviceRow:hover { background: rgba(255,255,255,.025) !important; }
+
+/* Action/report rows */
+.actionRow, .reportRow, .recentTaskRow, .ledgerRow {
+  border-bottom: 1px solid var(--r-border) !important;
+  transition: background var(--r-fast) var(--r-ease) !important;
+  padding: 8px 0 !important;
+}
+.actionRow:hover, .reportRow:hover, .recentTaskRow:hover {
+  background: rgba(255,255,255,.025) !important;
+  border-radius: 5px !important;
+}
+
+/* Buttons in action rows */
+.actionButtons button {
+  border-radius: 5px !important;
+  border: 1px solid var(--r-border) !important;
+  background: none !important;
+  color: var(--r-sub) !important;
+  font-size: 10px !important;
+  font-family: var(--r-mono) !important;
+  cursor: pointer !important;
+  transition: border-color var(--r-fast) var(--r-ease),
+              color var(--r-fast) var(--r-ease),
+              background var(--r-fast) var(--r-ease) !important;
+}
+.actionButtons button:hover:not(:disabled) {
+  border-color: var(--r-ac) !important;
+  color: var(--r-ac) !important;
+  background: var(--r-ac-dim) !important;
+}
+.actionButtons button:disabled { opacity: .35 !important; cursor: default !important; }
+
+/* ═══ SCROLLBAR ══════════════════════════════════════════════════════════════ */
+.dashboard::-webkit-scrollbar { width: 5px; }
+.dashboard::-webkit-scrollbar-track { background: transparent; }
+.dashboard::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
+.dashboard::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.14); }
+
+/* ═══ RESPONSIVE ═════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .sidebar { width: 52px; min-width: 52px; }
+  .sidebarLogoImg { display: none; }
+  .sidebarLogoCollapsed { display: block; }
+  .sidebarLogo { padding: 16px 0; justify-content: center; }
+  .sidebarNavItem { justify-content: center; padding: 10px 0; }
+  .sidebarNavLabel, .sidebarNavBadge { display: none; }
+  .sidebarFooter { padding: 8px 6px; }
+  .sidebarStatusInfo, .sidebarStatusLabel, .sidebarStatusValue { display: none; }
+  .sidebarStatusRow { justify-content: center; padding: 6px; }
+}
