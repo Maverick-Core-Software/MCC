@@ -621,7 +621,6 @@ async function buildDashboardContext() {
     `DATE/TIME: ${new Date().toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
   ];
 
-  // Local model — quick probe, 1.5s timeout
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 1500);
@@ -634,7 +633,6 @@ async function buildDashboardContext() {
     lines.push('LOCAL MODEL: OFFLINE');
   }
 
-  // Active orchestrator plan (in-memory, sync)
   const runs = orchestratorState.runs || [];
   if (runs.length > 0) {
     const latest = runs[0];
@@ -645,7 +643,6 @@ async function buildDashboardContext() {
     lines.push('ACTIVE PLAN: none');
   }
 
-  // Recent task runs from ledger (sync read)
   try {
     const taskRuns = readLedger();
     if (taskRuns.length > 0) {
@@ -691,8 +688,6 @@ async function streamUpstream(upstream, onToken) {
   return collected;
 }
 
-// ---------- BUILD pipeline: staged file changes + executor tools ----------
-
 function loadSkills() {
   try {
     if (!fs.existsSync(skillsPath)) return '';
@@ -719,24 +714,20 @@ function workspaceTree() {
     }
   };
 
-  // MCC project — deep
   lines.push(`[MCC] ${workspacePath}`);
   walk(workspacePath, '  ', 0, 3);
 
-  // Skills dir — shallow
   if (skillsPath !== workspacePath && fs.existsSync(skillsPath)) {
     lines.push(`\n[SKILLS] ${skillsPath}`);
     walk(skillsPath, '  ', 0, 1);
   }
 
-  // Parent dir — show sibling projects so Claude can navigate beyond MCC
   const parentDir = path.dirname(workspacePath);
   if (parentDir !== workspacePath && fs.existsSync(parentDir)) {
     lines.push(`\n[WORKSPACE ROOT] ${parentDir}`);
     walk(parentDir, '  ', 0, 1);
   }
 
-  // Other drive roots on Windows — list top-level dirs so Claude knows what drives exist
   if (process.platform === 'win32') {
     const workspaceDriveRoot = path.parse(workspacePath).root;
     for (const drive of ['C:\\', 'D:\\', 'E:\\', 'F:\\']) {
@@ -752,7 +743,6 @@ function workspaceTree() {
 }
 
 
-// Convert an absolute path to a safe relative path for staging storage
 function stagingSlug(p) {
   return p.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/').replace(/^\/+/, '');
 }
@@ -761,7 +751,7 @@ function stagingSlug(p) {
 function persistStagedRun(staged) {
   const dir = path.join(stagingRoot, staged.id);
   for (const f of staged.files) {
-    if (f.content === '__DELETE__') continue; // deletions are metadata only
+    if (f.content === '__DELETE__') continue;
     const target = path.join(dir, 'files', stagingSlug(f.path));
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, f.content);
@@ -798,7 +788,6 @@ async function applyStagedRun(req, res) {
     const applied = [];
     const deleted = [];
     for (const f of manifest.files) {
-      // f.path is an absolute path stored by runExecTool write_file
       const dest = resolveSafePath(f.path);
       if (!dest) continue;
       const slug = stagingSlug(f.path);
@@ -813,7 +802,6 @@ async function applyStagedRun(req, res) {
       fs.copyFileSync(src, dest);
       applied.push(dest);
     }
-    // Handle staged deletions
     for (const p of (manifest.deletions || [])) {
       const dest = resolveSafePath(p);
       if (!dest) continue;
@@ -836,7 +824,6 @@ async function applyStagedRun(req, res) {
 function handleListDirs(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const reqPath = url.searchParams.get('path') || 'C:\\';
-  // Normalize bare drive letters: 'C:' → 'C:\' so path.resolve returns the root, not process CWD
   const normalized = /^[A-Za-z]:$/.test(reqPath.trim()) ? reqPath.trim() + '\\' : reqPath;
   const abs = path.resolve(normalized);
   let dirs = [], files = [];
@@ -849,7 +836,7 @@ function handleListDirs(req, res) {
     }
     dirs.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
     files.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  } catch { /* unreadable — return empty */ }
+  } catch {}
   sendJson(res, 200, { path: abs, dirs, files });
 }
 
@@ -859,7 +846,6 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
   const staged = { id: `stage-${Date.now()}`, prompt, files: [], readPaths: new Set() };
   const recentHist = histMsgs.slice(-6).map(m => ({ role: m.role, content: String(m.content) }));
 
-  // If folders are attached, walk them at depth 3 and show MCC root at depth 1 only
   let treeBlock;
   if (folderPaths.length) {
     const skip = new Set(['node_modules', '.git', 'dist', 'tmp', '.mav-console', '.venv', '__pycache__']);
@@ -914,7 +900,6 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
       break;
     }
 
-    // Claude needs more info before proceeding — show the question and stop
     if (directive.clarify) {
       sseWrite(res, `\n${directive.clarify}\n`);
       res.write('data: [DONE]\n\n');
@@ -957,7 +942,6 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
 
   persistStagedRun(staged);
 
-  // Show STAGED / APPLY immediately — QC is informational, never blocks the user
   sseWrite(res, `\n\n[STAGED:${staged.id}] ${staged.files.length} file(s) ready: ${staged.files.map((f) => path.basename(f.path)).join(', ')}. Click APPLY when ready.\n`);
 
   if (nimApiKey && !controller.signal.aborted) {
@@ -979,7 +963,6 @@ async function handleOpsOrchestration(res, controller, prompt, histMsgs, ctxBloc
   const staged = { id: `stage-${Date.now()}`, prompt, files: [], readPaths: new Set() };
   const recentHist = histMsgs.slice(-6).map(m => ({ role: m.role, content: String(m.content) }));
 
-  // Build folder tree for attached paths
   let treeBlock = '';
   if (folderPaths.length) {
     const skip = new Set(['node_modules', '.git', 'dist', 'tmp', '.mav-console', '.venv', '__pycache__']);
@@ -1115,10 +1098,6 @@ async function runNimQc(staged, prompt, parentSignal) {
   }
 }
 
-// System prompts imported from server/services/systemPrompts.mjs
-// CLAUDE_ARCHITECT_SYSTEM — senior dev director loop (imported above)
-// CLAUDE_OPS_SYSTEM — personal ops assistant (imported above)
-
 
 
 function buildChatSseWrite(res, event) {
@@ -1185,7 +1164,6 @@ async function callClaude(messages, signal, systemPrompt) {
 }
 
 async function delegateWriteToQwen(task, staged, controller) {
-  // Qwen receives the current file + Claude's precise instruction and produces the full updated file
   const currentContent = staged.readPaths.has(task.path)
     ? (staged.files.find(f => f.path === task.path)?.content ?? null)
     : null;
@@ -1219,7 +1197,6 @@ async function delegateWriteToQwen(task, staged, controller) {
   const payload = await r.json();
   if (!r.ok) throw new Error(payload?.error?.message || `Qwen status ${r.status}`);
   const newContent = payload.choices?.[0]?.message?.content?.trim() || '';
-  // Strip any accidental markdown fences Qwen might add
   const stripped = newContent.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
   return await runExecTool('write_file', { path: task.path, content: stripped }, staged);
 }
@@ -1252,7 +1229,6 @@ async function handleBuildChat(req, res) {
 
   const staged = { id: `stage-${Date.now()}`, prompt: String(prompt).trim(), files: [], readPaths: new Set() };
 
-  // Build file context only from paths the user explicitly attached — no auto-scan
   const rawAttachments = (Array.isArray(attachments) ? attachments : [])
     .filter(a => a?.type === 'folder' || a?.type === 'file');
   const attachedPaths = [];
@@ -1308,7 +1284,6 @@ async function handleBuildChat(req, res) {
 
   buildChatSseWrite(res, { type: 'status', text: 'Claude is analyzing...' });
 
-  // Director/executor loop — Claude decides one task at a time, sees results, iterates
   for (let round = 0; round < 20 && !controller.signal.aborted; round++) {
     let directive;
     try {
@@ -1319,19 +1294,16 @@ async function handleBuildChat(req, res) {
       done(); return;
     }
 
-    // Done — no file changes
     if (directive.done && directive.answer) {
       buildChatSseWrite(res, { type: 'token', text: directive.answer });
       done(); return;
     }
 
-    // Done — files were changed
     if (directive.done) {
       if (staged.files.length) {
         persistStagedRun(staged);
         buildChatSseWrite(res, { type: 'staged', id: staged.id, files: staged.files.map(f => f.path) });
 
-        // NIM QC
         if (nimApiKey) {
           buildChatSseWrite(res, { type: 'status', text: 'NIM is verifying...' });
           try {
@@ -1370,7 +1342,6 @@ async function handleBuildChat(req, res) {
       done(); return;
     }
 
-    // Execute the delegated task
     const task = directive.task;
     if (!task?.tool) {
       buildChatSseWrite(res, { type: 'status', text: 'Claude returned unexpected format — stopping.' });
@@ -1396,12 +1367,10 @@ async function handleBuildChat(req, res) {
     const ok = !String(result).startsWith('ERROR') && !String(result).startsWith('REJECTED');
     buildChatSseWrite(res, { type: 'action', tool: task.tool, path: label, ok });
 
-    // Feed result back to Claude
     claudeMessages.push({ role: 'assistant', content: JSON.stringify(directive) });
     claudeMessages.push({ role: 'user', content: `Result of ${task.tool}(${label}):\n${String(result).slice(0, 6000)}` });
   }
 
-  // Hit round limit
   buildChatSseWrite(res, { type: 'status', text: 'Round limit reached.' });
   if (staged.files.length) {
     persistStagedRun(staged);
@@ -1418,7 +1387,6 @@ async function handleChat(req, res) {
       return;
     }
 
-    // Folder attachments — resolve paths server-side, no content upload needed
     const folderPaths = (Array.isArray(attachments) ? attachments : [])
       .filter((a) => a?.type === 'folder' && typeof a.path === 'string')
       .map((a) => resolveSafePath(a.path))
@@ -1454,7 +1422,6 @@ async function handleChat(req, res) {
     };
     const system = systemPrompts[mode] || systemPrompts.ask;
 
-    // Sanitize history — only valid user/assistant turns with content
     const histMsgs = (Array.isArray(history) ? history : [])
       .slice(-20)
       .filter(m => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim())
@@ -1470,25 +1437,21 @@ async function handleChat(req, res) {
     const controller = new AbortController();
     req.on('close', () => controller.abort());
 
-    // BUILD → Claude director → Qwen executor → NIM QC
     if (mode === 'build') {
       await handleBuildOrchestration(res, controller, prompt.trim(), histMsgs, ctxBlock, attachBlock, folderPaths);
       return;
     }
 
-    // OPS → Claude orchestrator → ops tool executor
     if (mode === 'ops') {
       await handleOpsOrchestration(res, controller, prompt.trim(), histMsgs, ctxBlock, attachBlock, folderPaths);
       return;
     }
 
-    // PI → Pi coding agent in RPC mode (local model, agentic file editing)
     if (mode === 'pi') {
       await runPiChat(res, controller.signal, prompt.trim(), { history: histMsgs });
       return;
     }
 
-    // ASK → RAG first (12s timeout), Qwen fallback for general questions
     if (mode === 'ask') {
       let ragOk = false;
       try {
@@ -1509,10 +1472,9 @@ async function handleChat(req, res) {
             sseWrite(res, reply);
           }
         }
-      } catch { /* RAG offline or timed out — fall through */ }
+      } catch {}
 
       if (!ragOk) {
-        // Qwen fallback: answer general questions with dashboard context
         const msgs = [
           { role: 'system', content: system + attachBlock },
           ...histMsgs,
@@ -1554,7 +1516,6 @@ async function handleChat(req, res) {
       return;
     }
 
-    // REVIEW → Gemini Flash (if key set), otherwise Qwen
     const useGemini = GEMINI_MODES.has(mode) && geminiApiKey;
     const messages = [
       { role: 'system', content: system + attachBlock },
