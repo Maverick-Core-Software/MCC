@@ -12,8 +12,8 @@ export function resolveSafePath(p) {
   if (path.isAbsolute(trimmed)) {
     abs = path.normalize(trimmed);
   } else {
-    const rel = path.normalize(trimmed.replace(/^[/\\]+/, ''));
-    if (rel.split(/[/\\]/).includes('..')) return null;
+    const rel = path.normalize(trimmed.replace(/^[\/\\]+/, ''));
+    if (rel.split(/[\/\\]/).includes('..')) return null;
     if (BLOCKED_REL.test(rel.replace(/\\/g, '/'))) return null;
     abs = path.join(workspacePath, rel);
   }
