@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, querySeoWeekPosts, api } from './lib/api.js';
+import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, querySeoWeekPosts, generateFacebookSchedule, api } from './lib/api.js';
 
 const TYPE_LABEL = { seo_run: 'SEO RUN', website_task: 'WEBSITE TASK', social_post: 'SOCIAL POST' };
 const STATE_COLOR = { pending_approval: '#f59e0b', needs_approval: '#f59e0b', approved: '#10b981', executing: '#6366f1', complete: '#10b981', error: '#ef4444', 'not-configured': '#6b7280' };
@@ -76,7 +76,6 @@ function WeekPostsSection({ weekPosts }) {
         </div>
       </div>
 
-      {/* Platform tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[
           { key: 'facebook', label: 'Facebook', count: fbCount, posted: fbPosted, label2: null },
@@ -100,7 +99,6 @@ function WeekPostsSection({ weekPosts }) {
         ))}
       </div>
 
-      {/* Posts grid */}
       {posts.length === 0 ? (
         <div style={{ color: '#6b7280', fontSize: 13, padding: '20px 0' }}>No posts scheduled this week.</div>
       ) : (
@@ -108,7 +106,6 @@ function WeekPostsSection({ weekPosts }) {
           {posts.map(post => {
             const isToday = post.post_date === today;
             const isPast = post.post_date < today;
-            // For scheduled GBP posts: show urgency based on date
             let statusColor = POST_STATUS_COLOR[post.status] || (isPast ? '#ef4444' : '#6b7280');
             let statusLabel = POST_STATUS_LABEL[post.status] || (isPast ? 'MISSED?' : 'SCHEDULED');
             if (post.status === 'scheduled') {
@@ -125,16 +122,11 @@ function WeekPostsSection({ weekPosts }) {
                 borderRadius: 7, padding: '10px 14px',
                 display: 'flex', alignItems: 'center', gap: 12,
               }}>
-                {/* Day */}
                 <div style={{ minWidth: 42, textAlign: 'center' }}>
                   <div style={{ color: isToday ? '#818cf8' : '#6b7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{dayLabel}</div>
                   <div style={{ color: isToday ? '#f1f5f9' : '#94a3b8', fontSize: 13, fontWeight: 600 }}>{post.post_date?.slice(5)}</div>
                 </div>
-
-                {/* Divider */}
                 <div style={{ width: 1, height: 36, background: '#2a2f45', flexShrink: 0 }} />
-
-                {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {clean(post.service) || clean(post.hook) || `Day ${post.day}`}
@@ -145,8 +137,6 @@ function WeekPostsSection({ weekPosts }) {
                     </div>
                   )}
                 </div>
-
-                {/* Status */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
                   <span style={{
                     background: statusColor + '22', color: statusColor,
@@ -268,6 +258,12 @@ export default function SEOApprovalPage() {
   const [promptApproving, setPromptApproving] = useState(false);
   const [promptResult, setPromptResult] = useState(null);
 
+  const [genOpen, setGenOpen] = useState(false);
+  const [genDays, setGenDays] = useState(7);
+  const [genStart, setGenStart] = useState('');
+  const [genLoading, setGenLoading] = useState(false);
+  const [genResult, setGenResult] = useState(null);
+
   const load = useCallback(async () => {
     try {
       const [wf, ac, wp] = await Promise.all([querySeoWorkflow(), querySeoActions(), querySeoWeekPosts()]);
@@ -277,7 +273,6 @@ export default function SEOApprovalPage() {
       setError(null);
       setLastUpdated(new Date());
 
-      // If run is awaiting_prompt, fetch the pending prompt
       if (wf?.state === 'awaiting_prompt') {
         try {
           const res = await fetch(api('/api/workflows/seo/facebook/pending-prompt'), { cache: 'no-store' });
@@ -318,6 +313,20 @@ export default function SEOApprovalPage() {
     }
   };
 
+  const handleGenerateSchedule = async () => {
+    setGenLoading(true);
+    setGenResult(null);
+    try {
+      const res = await generateFacebookSchedule(genDays, genStart);
+      setGenResult({ ok: true, msg: res.message || 'Started — check back in a few minutes.' });
+      setGenOpen(false);
+    } catch (err) {
+      setGenResult({ ok: false, msg: err.message });
+    } finally {
+      setGenLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
     const interval = setInterval(load, 30_000);
@@ -340,10 +349,66 @@ export default function SEOApprovalPage() {
             {lastUpdated && ` · updated ${lastUpdated.toLocaleTimeString()}`}
           </p>
         </div>
-        {workflow && (
-          <StatusBadge label={(workflow.state || 'unknown').replace(/-/g, ' ')} color={stateColor} />
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => { setGenOpen(o => !o); setGenResult(null); }}
+            style={{
+              padding: '7px 14px', background: genOpen ? '#1e3a5f' : 'transparent',
+              border: '1px solid #2563eb55', borderRadius: 6, color: '#60a5fa',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            + Generate Schedule
+          </button>
+          {workflow && (
+            <StatusBadge label={(workflow.state || 'unknown').replace(/-/g, ' ')} color={stateColor} />
+          )}
+        </div>
       </div>
+
+      {/* Generate Schedule panel */}
+      {genOpen && (
+        <div style={{ background: '#1a1d26', border: '1px solid #2563eb33', borderRadius: 8, padding: '16px 20px', marginBottom: 20 }}>
+          <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Generate Facebook Schedule</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ color: '#6b7280', fontSize: 11, marginBottom: 4 }}>Days</div>
+              <select
+                value={genDays}
+                onChange={e => setGenDays(Number(e.target.value))}
+                style={{ padding: '7px 10px', background: '#0f1117', border: '1px solid #2a2f45', borderRadius: 5, color: '#f1f5f9', fontSize: 13 }}
+              >
+                {[3, 5, 7].map(d => <option key={d} value={d}>{d} days</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ color: '#6b7280', fontSize: 11, marginBottom: 4 }}>Start Date (optional)</div>
+              <input
+                type="date"
+                value={genStart}
+                onChange={e => setGenStart(e.target.value)}
+                style={{ padding: '7px 10px', background: '#0f1117', border: '1px solid #2a2f45', borderRadius: 5, color: '#f1f5f9', fontSize: 13 }}
+              />
+            </div>
+            <button
+              onClick={handleGenerateSchedule}
+              disabled={genLoading}
+              style={{
+                padding: '8px 20px', background: genLoading ? '#2a2f45' : '#2563eb',
+                border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700,
+                cursor: genLoading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {genLoading ? 'Starting...' : '▶ Generate'}
+            </button>
+          </div>
+          {genResult && (
+            <div style={{ marginTop: 10, padding: '6px 10px', background: genResult.ok ? '#10b98122' : '#ef444422', border: `1px solid ${genResult.ok ? '#10b98144' : '#ef444444'}`, borderRadius: 5, color: genResult.ok ? '#10b981' : '#ef4444', fontSize: 12 }}>
+              {genResult.ok ? '✓ ' : '✗ '}{genResult.msg}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div style={{ color: '#6b7280', textAlign: 'center', padding: 60 }}>Loading pipeline status...</div>
