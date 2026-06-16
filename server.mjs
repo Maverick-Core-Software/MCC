@@ -2624,6 +2624,25 @@ const server = http.createServer(async (req, res) => {
     }
     return;
   }
+  if (url.pathname === '/api/rag/ask' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      const upstream = await fetch(new URL('/ask', ragUrl), {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      clearTimeout(timeout);
+      const data = await upstream.json();
+      sendJson(res, upstream.status, data);
+    } catch (err) {
+      sendJson(res, 502, { error: err.message });
+    }
+    return;
+  }
   if (url.pathname === '/api/rag/stats') {
     try {
       const controller = new AbortController();
