@@ -11,3 +11,7 @@ dashboard-*.png
 tmp/
 
 .claude/
+
+.mav-console/
+/app/
+src/lib/build-test.js

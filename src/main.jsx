@@ -1273,6 +1273,7 @@ function BuildChatPanel() {
   const abortRef = useRef(null);
   const historyRef = useRef([]);
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
 
   function handleItemSelected(item) {
     if (!item?.path) return;
@@ -1288,6 +1289,7 @@ function BuildChatPanel() {
     const text = input.trim();
     if (!text || busy) return;
     setInput('');
+    inputRef.current?.focus();
     setStagedId(null);
     setStagedFiles([]);
     setApplyStatus('');
@@ -1457,6 +1459,7 @@ function BuildChatPanel() {
         <form className="buildChatInputRow" onSubmit={handleSubmit}>
           <button type="button" className="buildChatFolderBtn" onClick={() => setShowFolderPicker(true)} disabled={busy} title="Attach a folder for Claude to focus on">📁</button>
           <input
+            ref={inputRef}
             className="chatInput"
             value={input}
             onChange={e => setInput(e.target.value)}

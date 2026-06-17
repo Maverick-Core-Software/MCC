@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -12,6 +12,8 @@ const prometheusUrl = process.env.PROMETHEUS_URL || 'http://192.168.1.12:9090';
 const ragUrl = process.env.MAV_RAG_URL || 'http://192.168.1.12:8181';
 const llamaServerUrl = process.env.LLAMA_SERVER_URL || 'http://127.0.0.1:8080';
 const localModel = process.env.LOCAL_MODEL || 'qwen3-14b';
+const piExecutable = process.env.PI_EXECUTABLE || 'pi';
+const piModel = process.env.PI_MODEL || 'qwen3-14b';
 const repoBridgeUrl = process.env.MAV_REPO_BRIDGE_URL || '';
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
 const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
@@ -1085,14 +1087,15 @@ function workspaceTree() {
 const EXEC_TOOLS = [
   { type: 'function', function: { name: 'list_dir', description: 'List files in a directory. Accepts absolute paths (e.g. C:\\Workspace\\MyProject) or relative paths from the MCC root. Directories end with /.', parameters: { type: 'object', properties: { path: { type: 'string', description: 'Absolute or relative directory path.' } }, required: [] } } },
   { type: 'function', function: { name: 'read_file', description: 'Read a text file. Accepts absolute or relative paths. Returns up to 6000 characters; use offset to page through large files.', parameters: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'number' } }, required: ['path'] } } },
-  { type: 'function', function: { name: 'write_file', description: 'Stage a file for human review — nothing is written until the user clicks APPLY. Content must be the complete file, never a partial snippet. Accepts absolute or relative paths.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } } },
-  { type: 'function', function: { name: 'run_command', description: 'Run a command in the MCC workspace. No shell operators (| ; && > etc). Useful for: node, npm, npx, git, pm2 list/logs/status, python, dir.', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } },
+  { type: 'function', function: { name: 'write_file', description: 'Delegate a file write to Pi (local coding agent). Pi reads the file, applies the instruction, and writes to disk immediately — no staging. Provide an exact instruction describing what to change.', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } } },
+  { type: 'function', function: { name: 'run_command', description: 'Run a short-lived command in the MCC workspace. No shell operators (| ; && > etc). NEVER use for long-running servers: npm run dev, npm start, next dev, vite, nodemon are all blocked. Useful for: npm install, npx, node --check, git, pm2 list/logs/status, python, dir.', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } },
   { type: 'function', function: { name: 'fetch_url', description: 'Fetch the content of any public URL and return it as plain text. Strips HTML tags. Good for reading documentation, API responses, JSON feeds, or checking if a URL is reachable. Returns up to 4000 characters.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'Full URL including https://' } }, required: ['url'] } } },
-  { type: 'function', function: { name: 'web_search', description: 'Search the web using Brave Search API. Returns top 5 results with titles, URLs, and descriptions. Use when you need current information, package docs, error solutions, or anything you cannot find in local files.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } }
+  { type: 'function', function: { name: 'web_search', description: 'Search the web using Brave Search API. Returns top 5 results with titles, URLs, and descriptions. Use when you need current information, package docs, error solutions, or anything you cannot find in local files.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query' } }, required: ['query'] } } },
+  { type: 'function', function: { name: 'delete_file', description: 'Delegate a file deletion to Pi (local coding agent). Pi deletes the file immediately from disk — no staging. Files only, not directories.', parameters: { type: 'object', properties: { path: { type: 'string', description: 'Absolute or relative path to the file to delete.' } }, required: ['path'] } } }
 ];
 
-const BLOCKED_COMMANDS = /(\brmdir\b|\bdel\b|\brd\b|\brm\b|\bformat\b|\bregdel\b|\bpowershell.*-enc\b|\bcurl.*\|\s*bash\b)/i;
-const SAFE_COMMAND = /^(node|npm|npx|git|pm2|python|python3|dir|type|where|echo|ping|tracert|nslookup|ipconfig)\b/i;
+const BLOCKED_COMMANDS = /(\brmdir\b|\bdel\b|\brd\b|\brm\b|\bformat\b|\bregdel\b|\bpowershell.*-enc\b|\bcurl.*\|\s*bash\b|npm\s+run\s+dev\b|npm\s+run\s+start\b|npm\s+start\b|next\s+dev\b|next\s+start\b|vite\b|nodemon\b)/i;
+const SAFE_COMMAND = /^(node|npm|npx|git|pm2|python|python3|dir|type|where|echo|ping|tracert|nslookup|ipconfig|mkdir|md|move|copy|ren|rename)\b/i;
 
 function runShellCommand(command) {
   return new Promise((resolve) => {
@@ -1168,6 +1171,19 @@ async function runExecTool(name, args, staged) {
     const entry = { path: abs, content: args.content };
     if (index >= 0) staged.files[index] = entry; else staged.files.push(entry);
     return `STAGED ${abs} (${args.content.length} chars). It will be applied to the workspace after human review.`;
+  }
+  if (name === 'delete_file') {
+    const abs = resolveSafePath(args.path);
+    if (abs === null) return 'ERROR: path not allowed';
+    if (abs.startsWith(stagingRoot) || abs.startsWith(backupRoot)) return 'ERROR: cannot delete build staging or backup infrastructure';
+    try {
+      const stat = fs.statSync(abs);
+      if (stat.isDirectory()) return 'ERROR: delete_file only removes files. Use run_command to handle directories.';
+    } catch { return `ERROR: file not found — ${abs}`; }
+    const index = staged.files.findIndex((f) => f.path === abs);
+    const entry = { path: abs, content: '__DELETE__' };
+    if (index >= 0) staged.files[index] = entry; else staged.files.push(entry);
+    return `STAGED deletion of ${abs}. File will be backed up and removed after human review.`;
   }
   if (name === 'fetch_url') {
     const url = String(args.url || '').trim();
@@ -1716,8 +1732,9 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
 
     let result;
     try {
-      if (task.tool === 'write_file') {
-        result = await delegateWriteToQwen(task, staged, controller);
+      if (task.tool === 'write_file' || task.tool === 'delete_file') {
+        sseWrite(res, '[Pi] ');
+        result = await delegateToPi(task, controller.signal);
       } else {
         result = await runExecTool(task.tool, { path: task.path, command: task.command }, staged);
       }
@@ -1728,32 +1745,33 @@ async function handleBuildOrchestration(res, controller, prompt, histMsgs, ctxBl
 
     const ok = !String(result).startsWith('ERROR') && !String(result).startsWith('REJECTED');
     sseWrite(res, `${ok ? '✓' : '✗'}\n`);
+    if (ok && (task.tool === 'write_file' || task.tool === 'delete_file')) sseWrite(res, `  ${String(result).split('\n')[0]}\n`);
+
+    // Tier 1 — ground truth check (always, free)
+    let verification = '';
+    if (task.tool === 'write_file' || task.tool === 'delete_file') {
+      verification = verifyPiResult(task);
+      sseWrite(res, `  ${verification}\n`);
+    }
+
+    // Tier 2 — code review (on demand, fast model)
+    let reviewResult = '';
+    if (task.review && task.tool === 'write_file' && verification.includes('CONFIRMED')) {
+      sseWrite(res, `  [Review] `);
+      reviewResult = await reviewPiOutput(task, controller.signal);
+      const verdict = reviewResult.split('\n')[0];
+      sseWrite(res, `${verdict}\n`);
+      if (reviewResult.includes('RETRY')) sseWrite(res, `  ${reviewResult.split('\n')[1] || ''}\n`);
+    }
 
     claudeMessages.push({ role: 'assistant', content: JSON.stringify(directive) });
-    claudeMessages.push({ role: 'user', content: `Result of ${task.tool}(${label}):\n${String(result).slice(0, 6000)}` });
+    claudeMessages.push({
+      role: 'user',
+      content: `Result of ${task.tool}(${label}):\n${String(result).slice(0, 6000)}${verification ? '\n' + verification : ''}${reviewResult ? '\n' + reviewResult : ''}`
+    });
   }
 
   if (controller.signal.aborted) { res.write('data: [DONE]\n\n'); res.end(); return; }
-
-  if (!staged.files.length) {
-    res.write('data: [DONE]\n\n');
-    res.end();
-    return;
-  }
-
-  persistStagedRun(staged);
-
-  // Show STAGED / APPLY immediately — QC is informational, never blocks the user
-  sseWrite(res, `\n\n[STAGED:${staged.id}] ${staged.files.length} file(s) ready: ${staged.files.map((f) => path.basename(f.path)).join(', ')}. Click APPLY when ready.\n`);
-
-  if (nimApiKey && !controller.signal.aborted) {
-    sseWrite(res, `\n---\n**[QC — NIM ${nimQcModel}]**\n\n`);
-    const qcText = await Promise.race([
-      runNimQc(staged, prompt, controller.signal),
-      new Promise((resolve) => setTimeout(() => resolve('[QC timed out — skipped. Review staged files manually.]\n'), 30_000))
-    ]);
-    sseWrite(res, qcText);
-  }
 
   res.write('data: [DONE]\n\n');
   res.end();
@@ -1905,7 +1923,7 @@ async function runNimQc(staged, prompt, parentSignal) {
 // Claude directs one task at a time and sees results before deciding the next step.
 const CLAUDE_ARCHITECT_SYSTEM = `You are the senior software developer at Maverick Integrations. Your job is to troubleshoot, debug, isolate, and direct code changes.
 
-You work with an executor (Qwen) who can only follow exact mechanical instructions. You direct, Qwen executes.
+You work with Pi, a local coding agent who reads and writes files directly to disk — no staging, no review step. Changes are immediate. You direct, Pi executes.
 
 Your workflow: analyze the problem → decide the next single action → output JSON → see the result → repeat until done.
 
@@ -1925,6 +1943,8 @@ Delegate a task:
 {"task":{"tool":"list_dir","path":"D:\\\\"}}
 {"task":{"tool":"run_command","command":"node --check server.mjs"}}
 {"task":{"tool":"write_file","path":"C:\\\\Workspace\\\\MyProject\\\\file.js","instruction":"Exact description: which function, what to add/change/remove, and where. Be specific enough that a junior dev could do it mechanically."}}
+{"task":{"tool":"write_file","path":"C:\\\\Workspace\\\\MyProject\\\\file.js","instruction":"...","review":true}}
+{"task":{"tool":"delete_file","path":"C:\\\\Workspace\\\\MyProject\\\\old-file.js"}}
 
 Ask for clarification before proceeding (use when critical info is missing):
 {"clarify":"What trigger should start this agent — scheduled, file event, or manual?"}
@@ -1943,7 +1963,7 @@ Declare done (files were changed):
 When the user asks you to create, build, or make an agent:
 1. If purpose, trigger, or target folder is unclear — use clarify first.
 2. Once you have enough info — propose the full .md content with done+answer. Do NOT write yet.
-3. When the user replies yes/confirmed/looks good — then write_file via Qwen.
+3. When the user replies yes/confirmed/looks good — then write_file via Pi.
 
 Maverick agents are .md files. The format:
 
@@ -1978,7 +1998,7 @@ Skills are reusable step-by-step procedures that YOU (Claude) follow when doing 
 When the user asks you to create a skill:
 1. If purpose or trigger is unclear — use clarify first.
 2. Propose the full skill .md with done+answer — do NOT write yet.
-3. When the user confirms — write_file to the skills/ folder via Qwen.
+3. When the user confirms — write_file to the skills/ folder via Pi.
 
 Skills format:
 \`\`\`
@@ -2004,14 +2024,63 @@ Skill folder: always ${skillsPath}
 
 When Loaded Skills appear in your context above, read them and follow their procedures precisely for matching tasks.
 
+## Build From Scratch Protocol
+
+Use this when the request is to build a new app, new project, or a major feature that does not yet exist.
+Do NOT use for bug fixes, quick edits, or single-file changes — those go straight to tasks.
+
+**Default stack — never ask about this:**
+Next.js (TypeScript) + Supabase + Vercel + Tailwind CSS + shadcn/ui.
+Use this unless the user explicitly names a different technology. Do not ask "what stack do you prefer?" — assume the default.
+
+**How to tell which mode:**
+- "build me a...", "create an app that...", "make a new project..." → planning mode
+- "fix this bug", "update this file", "add X to Y" → skip planning, execute directly
+
+### Phase 1 — Conception (gather requirements)
+
+Ask the user questions using clarify. You can group related questions into one clarify response.
+Ask only what you need to build a complete spec — do not over-ask.
+Do NOT ask about the tech stack — it is already defined above.
+
+Cover:
+- What problem does it solve / what does it do?
+- Who uses it? (just you, end users, internal tool?)
+- What are the 3–5 must-have features for the first version?
+- What is explicitly out of scope?
+- Where does it live? (standalone app, new page in existing project, CLI tool?)
+- What integrations are required? (APIs, databases, auth, third-party services)
+
+If the user's initial message already answers most of these, write the spec yourself and ask for confirmation instead of asking individually.
+
+### Phase 2 — Plan (design before building)
+
+Once you have enough information, produce a full plan. You MUST wrap it in a done+answer JSON object — do not output raw text.
+
+Output exactly this structure (the plan text goes inside the "answer" string value):
+{"done":true,"answer":"SPEC:\n  Goal: [one sentence]\n  Users: [who]\n  MVP features:\n    1. [feature]\n    2. [feature]\n  Out of scope: [list]\n  Stack: Next.js, Supabase, Vercel, Tailwind, shadcn/ui\n\nARCHITECTURE:\n  Data model: [tables and columns]\n  Routes: [list]\n  API endpoints: [method + path + purpose]\n  Env vars: [VAR_NAME - description]\n\nIMPLEMENTATION ORDER:\n  1. [first step]\n  2. [second step]\n\nReply 'build it' to start execution."}
+
+The entire response must be one JSON object. Never output the plan as raw text outside of JSON.
+
+### Phase 3 — Execution (after confirmation)
+
+When the user replies with "build it", "go ahead", "looks good", "confirmed", or similar:
+- Work through the implementation order from the plan, one task at a time
+- Add "review":true on every new file with real logic
+- Follow the normal execution loop: one task → wait for result → next task
+
 ## General Rules
 - One task per response. Wait for the result before deciding the next task.
 - Use absolute paths (e.g. C:\\Workspace\\...) whenever possible.
 - Always read_file before write_file on the same path.
-- For write_file: "instruction" must be exact — location, function name, what changes. Qwen is mechanical.
+- For write_file: "instruction" must be exact — location, function name, what changes. Pi is mechanical.
+- Add "review":true on write_file when the task is complex: new files with real logic, architectural changes, multi-step features, anything where correctness matters. Omit for trivial edits (typo fix, adding a comment, simple one-liner addition).
+- When review returns RETRY: issue a new write_file with a more specific instruction addressing the reason.
 - For simple info requests: read the file and declare done with an answer. Do not write anything.
 - Be surgical. Never touch files unrelated to the problem.
-- When the problem is fully resolved or the question is answered, declare done.`;
+- When the problem is fully resolved or the question is answered, declare done.
+- NEVER use run_command to start a dev server (npm run dev, npm start, next dev, vite, nodemon). These are long-running processes that block forever. Starting the app is the user's job, not yours.
+- When building a new Next.js app, always set the dev script in package.json to use port 3001 or higher (e.g. "dev": "next dev -p 3001") — port 3000 is reserved for the MCC dashboard.`;
 
 // OPS mode orchestrator prompt — personal assistant with full tool suite
 const CLAUDE_OPS_SYSTEM = `You are Maverick's personal operations assistant for Maverick Integrations.
@@ -2088,6 +2157,28 @@ function buildChatSseWrite(res, event) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
+// Extracts the first balanced JSON object from a string.
+// Handles nested objects, curly braces inside strings, and escape sequences.
+// More reliable than a greedy regex when the model includes extra text or multiple objects.
+function extractJsonObject(text) {
+  let depth = 0, start = -1, inString = false, escape = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 async function callGpt4o(messages, signal, systemPrompt) {
   const sys = systemPrompt || CLAUDE_ARCHITECT_SYSTEM;
   const gptMessages = [
@@ -2098,14 +2189,23 @@ async function callGpt4o(messages, signal, systemPrompt) {
     method: 'POST',
     signal,
     headers: { 'content-type': 'application/json', 'Authorization': `Bearer ${openAiApiKey}` },
-    body: JSON.stringify({ model: 'gpt-4o', messages: gptMessages, temperature: 0.2, max_tokens: 1024 })
+    body: JSON.stringify({ model: 'gpt-4o', messages: gptMessages, temperature: 0.2, max_tokens: 2048 })
   });
   if (!r.ok) throw new Error(`GPT-4o ${r.status}: ${await r.text().catch(() => '')}`);
   const payload = await r.json();
   const text = payload.choices?.[0]?.message?.content?.trim() || '';
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`GPT-4o returned non-JSON: ${text.slice(0, 200)}`);
-  return JSON.parse(match[0]);
+  const json = extractJsonObject(text);
+  if (!json) {
+    // Model output prose instead of JSON — surface it as a done+answer so the user sees it
+    console.warn('[GPT-4o] non-JSON response, wrapping as done+answer:', text.slice(0, 120));
+    return { done: true, answer: text };
+  }
+  try {
+    return JSON.parse(json);
+  } catch (err) {
+    console.warn('[GPT-4o] extracted JSON failed to parse, wrapping full text:', err.message);
+    return { done: true, answer: text };
+  }
 }
 
 async function callClaude(messages, signal, systemPrompt) {
@@ -2126,7 +2226,7 @@ async function callClaude(messages, signal, systemPrompt) {
         model: anthropicModel,
         system: sys,
         messages,
-        max_tokens: 1024,
+        max_tokens: 2048,
         temperature: 0.2
       })
     });
@@ -2137,15 +2237,169 @@ async function callClaude(messages, signal, systemPrompt) {
     }
     const payload = await r.json();
     const text = payload.content?.[0]?.text?.trim() || '';
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error(`Claude returned non-JSON: ${text.slice(0, 200)}`);
-    return JSON.parse(match[0]);
+    const json = extractJsonObject(text);
+    if (!json) {
+      console.warn('[Claude] non-JSON response, wrapping as done+answer:', text.slice(0, 120));
+      return { done: true, answer: text };
+    }
+    try {
+      return JSON.parse(json);
+    } catch (e) {
+      console.warn('[Claude] extracted JSON failed to parse, wrapping full text:', e.message);
+      return { done: true, answer: text };
+    }
   } catch (err) {
     if (err.name === 'AbortError') throw err;
     console.warn(`[planner] Claude error — falling back to GPT-4o: ${err.message}`);
     return callGpt4o(messages, signal, sys);
   }
 }
+
+// ── Pi RPC (BUILD executor) ────────────────────────────────────────────────
+
+function callPiRpc(prompt, signal) {
+  return new Promise((resolve, reject) => {
+    let proc;
+    try {
+      proc = spawn(piExecutable, ['--mode', 'rpc', '--no-session', '--model', piModel], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+        shell: process.platform === 'win32',
+      });
+    } catch (err) {
+      return reject(new Error(`Failed to spawn Pi: ${err.message}`));
+    }
+
+    let textBuffer = '';
+    let settled = false;
+
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      try { proc.kill(); } catch {}
+      if (err) reject(err);
+      else resolve(textBuffer.trim());
+    };
+
+    if (signal) signal.addEventListener('abort', () => finish(Object.assign(new Error('Aborted'), { name: 'AbortError' })), { once: true });
+
+    proc.stdout.on('data', (chunk) => {
+      for (const line of chunk.toString().split('\n')) {
+        if (!line.trim()) continue;
+        let event;
+        try { event = JSON.parse(line); } catch { continue; }
+        if (event.type === 'message_update') {
+          const ev = event.assistantMessageEvent;
+          if (ev?.type === 'text_delta') textBuffer += ev.delta;
+        }
+        if (event.type === 'agent_end') finish(null);
+        if (event.type === 'response' && event.success === false) finish(new Error(event.error || 'Pi RPC error'));
+      }
+    });
+
+    proc.stderr.on('data', (chunk) => console.warn('[Pi RPC]', chunk.toString().trim()));
+    proc.on('close', () => finish(null));
+    proc.on('error', (err) => finish(new Error(`Pi spawn error: ${err.message}`)));
+
+    proc.stdin.write(JSON.stringify({ type: 'prompt', message: prompt }) + '\n');
+  });
+}
+
+// ── Tier 1: ground-truth existence check (always, free) ───────────────────
+
+function verifyPiResult(task) {
+  if (task.tool === 'write_file') {
+    try {
+      const { size } = fs.statSync(task.path);
+      return size > 0
+        ? `[Verify] CONFIRMED — file exists (${size} bytes)`
+        : '[Verify] FAILED — file exists but is empty';
+    } catch {
+      return '[Verify] FAILED — file not found on disk after Pi reported success';
+    }
+  }
+  if (task.tool === 'delete_file') {
+    return fs.existsSync(task.path)
+      ? '[Verify] FAILED — file still exists on disk'
+      : '[Verify] CONFIRMED — file is gone';
+  }
+  return '';
+}
+
+// ── Tier 2: fast code review (on demand, NIM 8B → GPT-4o-mini fallback) ──
+
+async function reviewPiOutput(task, signal) {
+  let content;
+  try { content = fs.readFileSync(task.path, 'utf8').slice(0, 4000); }
+  catch { return 'VERDICT: WARN\nREASON: Could not read file for review.'; }
+
+  const reviewPrompt = `You are a senior code reviewer for a Next.js App Router project (TypeScript, Tailwind, shadcn/ui, Supabase). A coding agent just wrote this file. Review it for correctness and whether it will actually run.
+
+Task instruction: ${task.instruction}
+File: ${task.path}
+
+Content:
+${content}
+
+Check specifically:
+- If the file uses React hooks (useState, useEffect, etc.) or browser APIs (window, document, Notification), it MUST have "use client" as the very first line. Missing this = RETRY.
+- Named exports must match how they are imported elsewhere. A default export cannot be imported as a named export. Wrong export shape = RETRY.
+- File extension must match content: JSX/TSX syntax requires .tsx, plain TS requires .ts. Wrong extension = RETRY.
+- Import paths must be correct relative to the file's location (./foo for same dir, ../foo for parent).
+- No placeholder logic, hardcoded mock data passed off as real, or unimplemented stubs unless the task explicitly asked for mocks.
+
+Reply in EXACTLY this format (2 lines, nothing else):
+VERDICT: PASS | WARN | RETRY
+REASON: One sentence.
+
+PASS = correct, will run as-is. WARN = works but has notable issues. RETRY = will not run or is structurally wrong.`;
+
+  const body = { messages: [{ role: 'user', content: reviewPrompt }], temperature: 0.1, max_tokens: 150, stream: false };
+
+  if (nimApiKey) {
+    try {
+      const r = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST', signal: AbortSignal.timeout(20_000),
+        headers: { Authorization: `Bearer ${nimApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, model: nimQcModel }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return text;
+      }
+    } catch {}
+  }
+
+  if (openAiApiKey) {
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST', signal: AbortSignal.timeout(20_000),
+        headers: { Authorization: `Bearer ${openAiApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, model: 'gpt-4o-mini' }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim();
+        if (text) return text;
+      }
+    } catch {}
+  }
+
+  return 'VERDICT: WARN\nREASON: No review model available.';
+}
+
+async function delegateToPi(task, signal) {
+  // delete_file is handled server-side — Pi's bash uses `rm` which silently fails on Windows
+  if (task.tool === 'delete_file') {
+    fs.unlinkSync(task.path);
+    return `Deleted ${task.path}`;
+  }
+  const piPrompt = `You are a code editor executing a precise file change.\n\nFile: ${task.path}\nInstruction: ${task.instruction}\n\nSteps:\n1. Read the file at the exact path above using your read tool\n2. Apply the instruction — change only what is specified, preserve everything else\n3. Write the updated file back to the same path\n4. Reply with 1-2 sentences describing what you changed.\n\nExecute now. Do not ask questions.`;
+  return await callPiRpc(piPrompt, signal);
+}
+
+// ── Qwen HTTP delegate (OPS only) ─────────────────────────────────────────
 
 async function delegateWriteToQwen(task, staged, controller) {
   // Qwen receives the current file + Claude's precise instruction and produces the full updated file
@@ -2346,8 +2600,9 @@ async function handleBuildChat(req, res) {
 
     let result;
     try {
-      if (task.tool === 'write_file') {
-        result = await delegateWriteToQwen(task, staged, controller);
+      if (task.tool === 'write_file' || task.tool === 'delete_file') {
+        buildChatSseWrite(res, { type: 'status', text: `Pi → ${task.tool === 'delete_file' ? 'deleting' : 'writing'} ${label}` });
+        result = await delegateToPi(task, controller.signal);
       } else {
         result = await runExecTool(task.tool, { path: task.path, command: task.command }, staged);
       }
@@ -2358,18 +2613,38 @@ async function handleBuildChat(req, res) {
 
     const ok = !String(result).startsWith('ERROR') && !String(result).startsWith('REJECTED');
     buildChatSseWrite(res, { type: 'action', tool: task.tool, path: label, ok });
+    if (ok && (task.tool === 'write_file' || task.tool === 'delete_file')) {
+      buildChatSseWrite(res, { type: 'token', text: String(result).split('\n')[0] });
+    }
+
+    // Tier 1 — ground truth (always, free)
+    let verification = '';
+    if (task.tool === 'write_file' || task.tool === 'delete_file') {
+      verification = verifyPiResult(task);
+      buildChatSseWrite(res, { type: 'status', text: verification });
+    }
+
+    // Tier 2 — code review (on demand, fast model)
+    let reviewResult = '';
+    if (task.review && task.tool === 'write_file' && verification.includes('CONFIRMED')) {
+      buildChatSseWrite(res, { type: 'status', text: '[Review] running...' });
+      reviewResult = await reviewPiOutput(task, controller.signal);
+      buildChatSseWrite(res, { type: 'status', text: `[Review] ${reviewResult.split('\n')[0]}` });
+      if (reviewResult.includes('RETRY')) {
+        buildChatSseWrite(res, { type: 'status', text: reviewResult.split('\n')[1] || '' });
+      }
+    }
 
     // Feed result back to Claude
     claudeMessages.push({ role: 'assistant', content: JSON.stringify(directive) });
-    claudeMessages.push({ role: 'user', content: `Result of ${task.tool}(${label}):\n${String(result).slice(0, 6000)}` });
+    claudeMessages.push({
+      role: 'user',
+      content: `Result of ${task.tool}(${label}):\n${String(result).slice(0, 6000)}${verification ? '\n' + verification : ''}${reviewResult ? '\n' + reviewResult : ''}`
+    });
   }
 
   // Hit round limit
   buildChatSseWrite(res, { type: 'status', text: 'Round limit reached.' });
-  if (staged.files.length) {
-    persistStagedRun(staged);
-    buildChatSseWrite(res, { type: 'staged', id: staged.id, files: staged.files.map(f => f.path) });
-  }
   done();
 }
 
@@ -2758,6 +3033,22 @@ const server = http.createServer(async (req, res) => {
     }
     send(res, 200, data, types[path.extname(finalPath).toLowerCase()] || 'application/octet-stream');
   });
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    let owner = 'unknown';
+    try {
+      const out = execSync(`netstat -ano`, { encoding: 'utf8' });
+      const line = out.split('\n').find(l => l.includes(`:${port} `) && l.includes('LISTENING'));
+      if (line) owner = `PID ${line.trim().split(/\s+/).pop()}`;
+    } catch {}
+    console.error(`FATAL: Port ${port} already in use (${owner}). Kill it: Stop-Process -Id <pid> -Force`);
+    process.exit(1);
+  } else {
+    console.error('Server error:', err);
+    process.exit(1);
+  }
 });
 
 server.listen(port, '0.0.0.0', () => {
