@@ -5237,6 +5237,12 @@ body {
   opacity: .92;
   filter: brightness(1.05) saturate(1.1);
 }
+.sidebarLogoSvg {
+  width: 148px;
+  height: 44px;
+  display: block;
+  flex-shrink: 0;
+}
 .sidebarLogoCollapsed {
   display: none;
   font-size: 18px;
@@ -6053,6 +6059,20 @@ code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
   .homeHeroGrid { grid-template-columns: repeat(2, 1fr) !important; }
 
   /* ── Hardware page ── */
+  /* Stack all 4 panels vertically instead of the 12-column side-by-side layout */
+  .hardwareGrid {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "workstation"
+      "model"
+      "network"
+      "server" !important;
+  }
+  .hardwareGrid > .workstation,
+  .hardwareGrid > .modelOps,
+  .hardwareGrid > .network,
+  .hardwareGrid > .server { min-width: 0 !important; }
+
   .pcGaugeRow { grid-template-columns: repeat(2, 1fr) !important; }
   .gaugeRow    { grid-template-columns: repeat(2, 1fr) !important; }
   .hardwareSpecStrip { grid-template-columns: repeat(2, 1fr) !important; }
