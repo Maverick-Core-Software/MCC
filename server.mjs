@@ -1913,6 +1913,20 @@ async function handleOpsOrchestration(res, controller, prompt, histMsgs, ctxBloc
     if (toDelete.length) stageMsg += `${nonDelete.length ? '; ' : ''}${toDelete.length} deletion(s): ${toDelete.map(f => path.basename(f.path)).join(', ')}`;
     stageMsg += '. Click APPLY when ready.\n';
     sseWrite(res, stageMsg);
+
+    // Post-build debrief: concise summary of what was built and how to test it
+    if (!controller.signal.aborted) {
+      try {
+        const stagedPaths = staged.files.filter(f => f.content !== '__DELETE__').map(f => f.path).join('\n');
+        const debrief = await callClaude(
+          [{ role: 'user', content: `Build task: "${prompt.slice(0, 300)}"\n\nFiles staged:\n${stagedPaths}\n\nWrite a 1-2 sentence summary: what was created/changed (exact filenames) and one-liner on how to run or test it. No preamble, no headers.` }],
+          controller.signal,
+          'You are a senior developer. Be specific and concise.'
+        );
+        const debriefText = debrief.answer || debrief.summary || '';
+        if (debriefText) sseWrite(res, `\n**Summary:** ${debriefText}\n`);
+      } catch {}
+    }
   }
 
   res.write('data: [DONE]\n\n');
@@ -2730,6 +2744,87 @@ async function handleBuildChat(req, res) {
   done();
 }
 
+async function handleClaudeCodeSession(res, controller, prompt, histMsgs, attachBlock, folderPaths) {
+  const workDir = folderPaths[0] || workspacePath;
+
+  const histCtx = histMsgs.slice(-4)
+    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${String(m.content).slice(0, 500)}`)
+    .join('\n');
+  const fullPrompt = [
+    histCtx ? `Previous context:\n${histCtx}` : '',
+    attachBlock ? `\nAttached context:${attachBlock}` : '',
+    `\nTask: ${prompt}`
+  ].filter(Boolean).join('\n').trim();
+
+  sseWrite(res, '⚡ **SUPERPOWERS — CLAUDE CODE**\n\n');
+
+  const proc = spawn('claude', [
+    '--print',
+    '--output-format', 'stream-json',
+    '--dangerously-skip-permissions',
+    fullPrompt
+  ], { cwd: workDir, env: { ...process.env } });
+
+  controller.signal.addEventListener('abort', () => { try { proc.kill(); } catch {} });
+
+  let buf = '';
+  let emittedText = '';
+
+  proc.stdout.on('data', (chunk) => {
+    buf += chunk.toString('utf8');
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const evt = JSON.parse(trimmed);
+        if (evt.type === 'assistant' && Array.isArray(evt.message?.content)) {
+          for (const block of evt.message.content) {
+            if (block.type === 'text' && block.text) {
+              sseWrite(res, block.text);
+              emittedText += block.text;
+            }
+          }
+        } else if (evt.type === 'tool_use') {
+          const toolName = evt.name || '';
+          const inp = evt.input || {};
+          const detail = inp.file_path || inp.command || inp.path || inp.query || '';
+          sseWrite(res, `\n\`→ ${toolName}(${String(detail).slice(0, 80)})\`\n`);
+        } else if (evt.type === 'result') {
+          const cost = evt.total_cost_usd != null ? ` · $${Number(evt.total_cost_usd).toFixed(4)}` : '';
+          if (evt.result && !emittedText.includes(evt.result.slice(0, 50))) {
+            sseWrite(res, `\n\n${evt.result}`);
+          }
+          if (cost) sseWrite(res, `\n\n*${evt.subtype || 'done'}${cost}*`);
+        }
+      } catch {}
+    }
+  });
+
+  proc.stderr.on('data', (chunk) => {
+    const msg = chunk.toString('utf8').trim();
+    if (msg && !msg.includes('ExperimentalWarning') && !msg.includes('DeprecationWarning')) {
+      sseWrite(res, `\n[stderr: ${msg.slice(0, 200)}]\n`);
+    }
+  });
+
+  await new Promise((resolve) => {
+    proc.on('close', resolve);
+    proc.on('error', (err) => {
+      if (err.code === 'ENOENT') {
+        sseWrite(res, '\n[Claude Code CLI not found — install with: npm install -g @anthropic-ai/claude-code]\n');
+      } else {
+        sseWrite(res, `\n[Error spawning claude: ${err.message}]\n`);
+      }
+      resolve();
+    });
+  });
+
+  res.write('data: [DONE]\n\n');
+  res.end();
+}
+
 async function handleChat(req, res) {
   try {
     const { prompt, mode = 'ask', history = [], attachments = [] } = await readJsonBody(req);
@@ -2799,6 +2894,12 @@ async function handleChat(req, res) {
     // OPS → Claude orchestrator → ops tool executor
     if (mode === 'ops') {
       await handleOpsOrchestration(res, controller, prompt.trim(), histMsgs, ctxBlock, attachBlock, folderPaths);
+      return;
+    }
+
+    // SUPERPOWERS → full Claude Code CLI session, direct file access
+    if (mode === 'claude-code') {
+      await handleClaudeCodeSession(res, controller, prompt.trim(), histMsgs, attachBlock, folderPaths);
       return;
     }
 

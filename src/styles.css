@@ -3294,6 +3294,14 @@ body {
   text-shadow: 0 0 8px rgba(80, 240, 160, .6);
 }
 
+.workflowBtn.active.purple {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, .65);
+  background: rgba(147, 51, 234, .12);
+  box-shadow: 0 0 12px rgba(192, 132, 252, .22), inset 0 0 10px rgba(147, 51, 234, .06);
+  text-shadow: 0 0 8px rgba(192, 132, 252, .7);
+}
+
 .workflowBtn:disabled {
   opacity: .35;
   cursor: not-allowed;
