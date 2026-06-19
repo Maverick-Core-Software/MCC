@@ -167,7 +167,7 @@ async function fetchSeoFromSupabase() {
   if (!supabase) throw new Error('no supabase');
   const [runsRes, postsRes, tasksRes] = await Promise.all([
     supabase.from('seo_runs').select('*').order('created_at', { ascending: false }).limit(20),
-    supabase.from('weekly_posts').select('platform,status,service').order('created_at', { ascending: false }).limit(100),
+    supabase.from('weekly_posts').select('platform,status,service,post_date,error').order('created_at', { ascending: false }).limit(100),
     supabase.from('website_tasks').select('status').eq('status', 'pending_approval').limit(100),
   ]);
   const runs = runsRes.data || [];
@@ -184,9 +184,10 @@ async function fetchSeoFromSupabase() {
   }
 
   const pendingPosts = posts.filter(p => p.status === 'pending_approval');
+  const blockedPostStatuses = new Set(['error', 'needs_verification']);
   const actionSummary = {
     needs_approval: pendingPosts.length + pendingTaskCount,
-    blocked_access: posts.filter(p => p.status === 'error').length,
+    blocked_access: posts.filter(p => blockedPostStatuses.has(p.status)).length,
   };
 
   const reports = runs
@@ -199,10 +200,15 @@ async function fetchSeoFromSupabase() {
       label: `Run ${r.week_of || r.id?.slice(0, 8) || '?'}`,
     }));
 
-  const faults = runs
+  const runFaults = runs
     .filter(r => r.status === 'error')
     .slice(0, 3)
     .map(r => `Run ${r.id?.slice(0, 8) || '?'} failed`);
+  const postFaults = posts
+    .filter(p => blockedPostStatuses.has(p.status))
+    .slice(0, 3)
+    .map(p => `${String(p.platform || 'social').toUpperCase()} ${p.post_date || 'post'} needs review: ${p.error || p.status}`);
+  const faults = [...postFaults, ...runFaults].slice(0, 3);
 
   const nowMs = Date.now();
   const sevenDaysAgoMs = nowMs - 7 * 24 * 60 * 60 * 1000;

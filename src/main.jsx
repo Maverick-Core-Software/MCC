@@ -1513,7 +1513,7 @@ function HomePage({ modelStatus }) {
       return !done && !['dry_run_ready', 'complete', 'completed', 'verified'].includes(status);
     })
     .sort((a, b) => {
-      const rank = { needs_approval: 0, approved: 1, blocked_access: 2, needs_review: 3 };
+      const rank = { needs_approval: 0, approved: 1, blocked_access: 2, needs_verification: 2, needs_review: 3 };
       return (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
     });
   const runHealth = seoWorkflow.runHealth || null;
