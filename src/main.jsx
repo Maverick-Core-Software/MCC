@@ -2026,7 +2026,7 @@ function HomePage({ modelStatus }) {
 
 const WORKFLOW_MODES = [
   { id: 'ask',         label: 'ASK MAVERICK',  accent: 'cyan',   tooltip: 'Ask business questions — queries Proxmox RAG knowledge base, falls back to Qwen for general questions when RAG is offline' },
-  { id: 'estimate',    label: 'ESTIMATE',       accent: 'amber',  tooltip: 'Convert a scoped job into a Grizzly estimate — Good/Better/Best pricing, RAG-powered, pushes to HCP' },
+  { id: 'estimate',    label: 'ESTIMATE',       accent: 'amber',  tooltip: 'Convert a scoped job into a real HCP estimate — RAG-powered scope, price-book matched line items, pushed to HCP (same pipeline as the email watcher)' },
   { id: 'build',       label: 'BUILD / FIX',   accent: 'amber',  tooltip: 'Claude plans, Qwen executes — full filesystem access, build or edit any file on any drive' },
   { id: 'ops',         label: 'OPERATIONS',    accent: 'green',  tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
   { id: 'claude-code', label: 'SUPERPOWERS',   accent: 'purple', tooltip: 'Claude Code CLI — direct file editing, shell commands, full tool use. No staging, no approval gates. Runs autonomously.' },

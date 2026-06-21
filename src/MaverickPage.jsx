@@ -134,7 +134,7 @@ export default function MaverickPage() {
               {[
                 'Start an estimate for a 200A service upgrade residential',
                 'Look up customer Grizzly demo and check last job',
-                'Write a Good/Better/Best proposal for panel replacement',
+                'Create an HCP estimate for a panel replacement',
                 'What does the Oncor spec require for underground service?',
               ].map(p => (
                 <button key={p} className="mavPromptChip" onClick={() => { setInput(p); textareaRef.current?.focus(); }}>
