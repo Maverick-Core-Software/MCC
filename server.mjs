@@ -34,6 +34,7 @@ const ledgerFile = path.join(dataDir, 'task-runs.json');
 const workspacePath = process.env.MAV_CONSOLE_WORKSPACE || __dirname;
 const memoryPath = process.env.MAV_MEMORY_PATH || 'C:\\Users\\carte\\.claude\\projects\\memory';
 const skillsPath = process.env.MAV_SKILLS_PATH || path.join(__dirname, 'skills');
+const hcpDir = process.env.HCP_PROJECT_DIR || 'C:\\Users\\carte\\Grizzly-HCP';
 
 // Blocked system and sensitive paths — everything else is accessible.
 // MAV_EXTRA_ROOTS is kept for backward compat but no longer needed for access control.
@@ -2361,6 +2362,59 @@ async function callClaude(messages, signal, systemPrompt) {
   }
 }
 
+// Vision query — Claude streaming with image attachments (blueprints, site photos, scanned PDFs)
+async function handleVisionQuery(res, controller, imageAttachments, textPrompt, histMsgs, system) {
+  if (!anthropicApiKey) {
+    sseWrite(res, '[Vision requires ANTHROPIC_API_KEY — not configured]');
+    return;
+  }
+  const content = [
+    ...imageAttachments.map(img => ({
+      type: 'image',
+      source: { type: 'base64', media_type: img.mimeType || 'image/jpeg', data: img.data }
+    })),
+    { type: 'text', text: textPrompt || 'Analyze these images.' }
+  ];
+  const messages = [...histMsgs, { role: 'user', content }];
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model: anthropicModel, system, messages, max_tokens: 2048, stream: true }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      sseWrite(res, `[Vision API error ${r.status}: ${txt.slice(0, 100)}]`);
+      return;
+    }
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const tok = JSON.parse(line.slice(6).trim());
+          // Anthropic streaming: {type:"content_block_delta", delta:{type:"text_delta", text:"..."}}
+          if (tok.type === 'content_block_delta' && tok.delta?.text) sseWrite(res, tok.delta.text);
+        } catch {}
+      }
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') sseWrite(res, `[Vision error: ${err.message}]`);
+  }
+}
+
 // ── Pi RPC (BUILD executor) ────────────────────────────────────────────────
 
 function callPiRpc(prompt, signal) {
@@ -2855,66 +2909,108 @@ async function handleClaudeCodeSession(res, controller, prompt, histMsgs, attach
 }
 
 async function handleEstimateMode(res, controller, prompt, histMsgs, attachBlock) {
-  const msgWithAttach = attachBlock ? `${prompt}\n\n${attachBlock}` : prompt;
-  let ragOk = false;
-  const ragCtrl = new AbortController();
-  const ragTimeout = setTimeout(() => ragCtrl.abort(), 90_000);
+  // Extract customer info + scope from the full conversation context using Haiku
+  const fullContext = [
+    ...histMsgs.slice(-8),
+    { role: 'user', content: attachBlock ? `${prompt}\n\n${attachBlock}` : prompt }
+  ];
+
+  let extracted = null;
   try {
-    const ragResp = await fetch(new URL('/estimate-stream', ragUrl), {
+    const extractRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      signal: ragCtrl.signal,
-      body: JSON.stringify({ message: msgWithAttach, history: histMsgs, top_k: 20 })
+      signal: controller.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        system: `Extract customer info and job scope from this electrical estimating conversation.
+Return ONLY valid JSON — no prose, no markdown:
+{
+  "customerName": "...",
+  "customerEmail": "...",
+  "customerPhone": "...",
+  "scope": "...",
+  "ready": true
+}
+- customerName/Email/Phone: null if not mentioned anywhere in the conversation
+- scope: a concise summary of all the electrical work to be estimated (required)
+- ready: false only if there is truly no scope or job description to work with`,
+        messages: fullContext.map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: typeof m.content === 'string' ? m.content.slice(0, 2000) : JSON.stringify(m.content).slice(0, 2000),
+        })),
+      }),
     });
-    if (ragResp.ok) {
-      const reader = ragResp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      let hasContent = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const raw = line.slice(6).trim();
-          if (raw === '[DONE]') { ragOk = true; break; }
-          try {
-            const tok = JSON.parse(raw);
-            if (tok.delta) { sseWrite(res, tok.delta); hasContent = true; }
-          } catch {}
-        }
-      }
-      if (hasContent) ragOk = true;
+    if (extractRes.ok) {
+      const data = await extractRes.json();
+      const text = (data.content?.[0]?.text || '').trim();
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) extracted = JSON.parse(match[0]);
     }
-  } catch (err) {
-    // fall through — AbortError or network error, ragOk stays false
-  } finally {
-    clearTimeout(ragTimeout);
+  } catch (e) {
+    if (e.name === 'AbortError') { if (res.writable) { res.write('data: [DONE]\n\n'); res.end(); } return; }
   }
 
-  if (!ragOk) {
-    const msgs = [
-      ...histMsgs,
-      { role: 'user', content: msgWithAttach }
-    ];
-    try {
-      const directive = await callClaude(msgs, controller.signal, CLAUDE_ESTIMATE_FALLBACK_SYSTEM);
-      const reply = directive.answer
-        || directive.summary
-        || (typeof directive === 'string' ? directive : '')
-        || (typeof directive === 'object' && directive !== null ? JSON.stringify(directive) : '');
-      if (reply) sseWrite(res, reply);
-    } catch (e) {
-      if (e.name === 'AbortError') {
-        if (res.writable) { res.write('data: [DONE]\n\n'); res.end(); }
-        return;
-      }
-      sseWrite(res, '[Estimate service offline. Please try again shortly.]');
-    }
+  if (!extracted?.ready || !extracted?.scope) {
+    sseWrite(res, "I need a bit more context to build this estimate. What's the job? Describe the electrical work needed and let me know who the customer is if you have that info.");
+    if (res.writable) { res.write('data: [DONE]\n\n'); res.end(); }
+    return;
   }
+
+  // Stream progress and spawn the HCP estimate pipeline
+  sseWrite(res, '⚡ Running estimate pipeline...\n\n');
+
+  await new Promise(resolve => {
+    const proc = spawn('npx', ['tsx', 'src/automations/estimates/from-chat.ts'], {
+      cwd: hcpDir,
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true,
+    });
+
+    proc.stdin.write(JSON.stringify({
+      scope: extracted.scope,
+      customerName:  extracted.customerName  || undefined,
+      customerEmail: extracted.customerEmail || undefined,
+      customerPhone: extracted.customerPhone || undefined,
+    }));
+    proc.stdin.end();
+
+    let stdout = '';
+    proc.stdout.on('data', d => { stdout += d; });
+    proc.stderr.on('data', d => {
+      const lines = d.toString().split('\n');
+      for (const line of lines) {
+        const m = line.match(/\[progress\] (.+)/);
+        if (m) sseWrite(res, m[1].trim() + '\n');
+      }
+    });
+
+    const timer = setTimeout(() => { proc.kill(); sseWrite(res, '\n❌ Pipeline timed out after 3 minutes.'); resolve(); }, 180_000);
+
+    proc.on('close', () => {
+      clearTimeout(timer);
+      try {
+        const result = JSON.parse(stdout);
+        if (result.success) {
+          sseWrite(res, `\n✅ Estimate created!\n\n[Open in HCP](${result.estimateUrl})`);
+        } else {
+          sseWrite(res, `\n❌ Pipeline failed: ${result.error}`);
+        }
+      } catch {
+        sseWrite(res, '\n❌ Pipeline returned unexpected output.');
+      }
+      resolve();
+    });
+
+    proc.on('error', err => { clearTimeout(timer); sseWrite(res, `\n❌ Failed to start pipeline: ${err.message}`); resolve(); });
+    controller.signal.addEventListener('abort', () => { clearTimeout(timer); proc.kill(); resolve(); }, { once: true });
+  });
 
   if (res.writable) { res.write('data: [DONE]\n\n'); res.end(); }
 }
@@ -2933,6 +3029,11 @@ async function handleChat(req, res) {
       .map((a) => resolveSafePath(a.path))
       .filter(Boolean)
       .slice(0, 5);
+
+    // Image attachments — routed to Claude vision, bypassing RAG
+    const imageAttachments = (Array.isArray(attachments) ? attachments : [])
+      .filter(a => a?.type === 'image' && typeof a.data === 'string' && a.data.length > 0)
+      .slice(0, 4);
 
     let attachBlock = '';
     const attachList = (Array.isArray(attachments) ? attachments : [])
@@ -2996,34 +3097,57 @@ async function handleChat(req, res) {
       return;
     }
 
-    // ESTIMATE → RAG estimate endpoint with extended context and timeout
+    // ESTIMATE → extract scope + customer from conversation, spawn from-chat.ts → push to HCP
     if (mode === 'estimate') {
       await handleEstimateMode(res, controller, prompt.trim(), histMsgs, attachBlock);
       return;
     }
 
-    // ASK → RAG first (12s timeout), Qwen fallback for general questions
+    // ASK → vision if images attached; otherwise RAG estimate-stream (60s, top_k 20), Claude/Qwen fallback
     if (mode === 'ask') {
+      if (imageAttachments.length > 0) {
+        await handleVisionQuery(res, controller, imageAttachments,
+          prompt.trim() + (attachBlock ? '\n\n' + attachBlock : ''),
+          histMsgs, CLAUDE_ESTIMATE_FALLBACK_SYSTEM);
+        if (res.writable) { res.write('data: [DONE]\n\n'); res.end(); }
+        return;
+      }
+
       let ragOk = false;
+      const ragCtrl = new AbortController();
+      const ragTimeout = setTimeout(() => ragCtrl.abort(), 60_000);
       try {
-        const ragCtrl = new AbortController();
-        const ragTimeout = setTimeout(() => ragCtrl.abort(), 12_000);
-        const ragResp = await fetch(new URL('/estimate', ragUrl), {
+        const ragResp = await fetch(new URL('/estimate-stream', ragUrl), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           signal: ragCtrl.signal,
-          body: JSON.stringify({ message: prompt.trim(), history: histMsgs, top_k: 12 })
+          body: JSON.stringify({ message: prompt.trim() + (attachBlock ? '\n\n' + attachBlock : ''), history: histMsgs, top_k: 20 })
         });
         clearTimeout(ragTimeout);
         if (ragResp.ok) {
-          const ragData = await ragResp.json();
-          const reply = (ragData.reply || '').trim();
-          if (reply) {
-            ragOk = true;
-            sseWrite(res, reply);
+          const reader = ragResp.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = '';
+          let hasContent = false;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const raw = line.slice(6).trim();
+              if (raw === '[DONE]') { ragOk = true; break; }
+              try {
+                const tok = JSON.parse(raw);
+                if (tok.delta) { sseWrite(res, tok.delta); hasContent = true; }
+              } catch {}
+            }
           }
+          if (hasContent) ragOk = true;
         }
-      } catch { /* RAG offline or timed out — fall through */ }
+      } catch { clearTimeout(ragTimeout); /* RAG offline or timed out — fall through */ }
 
       if (!ragOk) {
         // Claude fallback (→ GPT-4o if no key), then Qwen if both unavailable
@@ -3033,7 +3157,7 @@ async function handleChat(req, res) {
         ];
         let claudeOk = false;
         try {
-          const directive = await callClaude(msgs, controller.signal, system);
+          const directive = await callClaude(msgs, controller.signal, CLAUDE_ESTIMATE_FALLBACK_SYSTEM);
           const reply = directive.answer || directive.summary || (typeof directive === 'string' ? directive : '');
           if (reply) { sseWrite(res, reply); claudeOk = true; }
         } catch (cErr) {
@@ -3043,7 +3167,7 @@ async function handleChat(req, res) {
         if (!claudeOk) {
           // Qwen last-resort: local model when both RAG and Claude are unavailable
           const qMsgs = [
-            { role: 'system', content: system },
+            { role: 'system', content: CLAUDE_ESTIMATE_FALLBACK_SYSTEM },
             ...histMsgs,
             { role: 'user', content: prompt.trim() }
           ];

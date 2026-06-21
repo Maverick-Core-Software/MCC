@@ -747,10 +747,24 @@ function workerLabel(workerId) {
 
 const ATTACH_IGNORE = new Set(['node_modules', '.git', 'dist', '.venv', '__pycache__', '.cache', 'build', '.next', 'tmp']);
 const ATTACH_EXTS = new Set(['.mjs', '.js', '.jsx', '.ts', '.tsx', '.py', '.css', '.json', '.cjs', '.md', '.sh', '.ps1', '.yaml', '.yml']);
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
 const MAX_FILE_BYTES = 8000;
 const MAX_TOTAL_BYTES = 32000;
 
 async function readFileText(file) {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  if (IMAGE_EXTS.has(ext) || file.type.startsWith('image/')) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const dataUrl = e.target.result || '';
+        const base64 = dataUrl.split(',')[1] || '';
+        resolve({ __image: true, data: base64, mimeType: file.type || `image/${ext}` });
+      };
+      reader.onerror = () => resolve('[unreadable]');
+      reader.readAsDataURL(file);
+    });
+  }
   return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = e => resolve(e.target.result || '');
@@ -792,10 +806,81 @@ function ApplyStagedButton({ stageId }) {
   );
 }
 
-function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse, onStop, onClear, workflowMode, setWorkflowMode, attachedFiles, onAddFiles, onRemoveFile, permanent }) {
+// ── Job history helpers ───────────────────────────────────────────────────────
+const MCC_JOB_INDEX_KEY = 'mcc-job-index';
+const mccJobKey = id => 'mcc-job-' + id;
+function mccLoadJobIndex() {
+  try { return JSON.parse(localStorage.getItem(MCC_JOB_INDEX_KEY) || '[]'); } catch { return []; }
+}
+function mccSaveJob(label, history) {
+  if (!history.length) return;
+  const id = Date.now().toString(36);
+  const index = mccLoadJobIndex();
+  index.unshift({ id, label, ts: Date.now() });
+  try { localStorage.setItem(MCC_JOB_INDEX_KEY, JSON.stringify(index.slice(0, 20))); } catch {}
+  try { localStorage.setItem(mccJobKey(id), JSON.stringify(history)); } catch {}
+}
+function mccLoadJob(id) {
+  try { return JSON.parse(localStorage.getItem(mccJobKey(id)) || '[]'); } catch { return []; }
+}
+
+function MccJobHistoryPanel({ onRestore, onClose }) {
+  const jobs = mccLoadJobIndex();
+  return (
+    <div className="jobPanel">
+      <div className="jobPanelHeader">
+        <span>SAVED JOBS</span>
+        <button className="jobPanelClose" onClick={onClose}>×</button>
+      </div>
+      {jobs.length === 0
+        ? <div className="jobPanelEmpty">No saved jobs yet. CLR to save the current conversation.</div>
+        : <div className="jobPanelList">
+            {jobs.map(j => (
+              <button key={j.id} className="jobPanelItem" onClick={() => { onRestore(mccLoadJob(j.id)); onClose(); }}>
+                <span className="jobPanelLabel">{j.label}</span>
+                <span className="jobPanelTs">{new Date(j.ts).toLocaleDateString()}</span>
+              </button>
+            ))}
+          </div>
+      }
+    </div>
+  );
+}
+
+function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse, onStop, onClear, onRestoreJob, workflowMode, setWorkflowMode, attachedFiles, onAddFiles, onRemoveFile, permanent }) {
   const historyRef = useRef(null);
   const rafRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const [showJobHistory, setShowJobHistory] = useState(false);
+
+  function toggleVoice() {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = e => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+      setInput(transcript);
+    };
+    rec.onend = () => setIsListening(false);
+    recognitionRef.current = rec;
+    rec.start();
+    setIsListening(true);
+  }
+
+  function handleClear() {
+    const lbl = window.prompt('Save this job as:', 'Job ' + new Date().toLocaleDateString());
+    if (lbl !== null) mccSaveJob(lbl.trim() || 'Untitled', history);
+    onClear();
+  }
 
   useEffect(() => {
     if (!history.length) return;
@@ -814,9 +899,13 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
     for (const file of files.slice(0, 60)) {
       if (total >= MAX_TOTAL_BYTES) break;
       const raw = await readFileText(file);
-      const content = raw.slice(0, MAX_FILE_BYTES);
-      items.push({ name: file.name, content });
-      total += content.length;
+      if (raw && typeof raw === 'object' && raw.__image) {
+        items.push({ name: file.name, type: 'image', data: raw.data, mimeType: raw.mimeType });
+      } else {
+        const content = (typeof raw === 'string' ? raw : '').slice(0, MAX_FILE_BYTES);
+        items.push({ name: file.name, content });
+        total += content.length;
+      }
     }
     if (items.length) onAddFiles(items);
     e.target.value = '';
@@ -837,18 +926,27 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
   return (
     <Panel title="MAVERICK // ORCHESTRATOR" className="chatSessionPanel">
       {!permanent && <button type="button" className="chatCollapseBtn" onClick={onCollapse}>↙ COLLAPSE</button>}
-      <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => handleFilePick(e)} />
+      <input ref={fileInputRef} type="file" multiple accept="image/*,.js,.jsx,.ts,.tsx,.mjs,.py,.css,.json,.md,.sh,.ps1,.yaml,.yml,.txt,.html" style={{ display: 'none' }} onChange={e => handleFilePick(e)} />
       <div className="chatSessionHistory" ref={historyRef}>
         {history.length === 0 && <div className="chatSessionEmpty">No messages yet. Send a command below.</div>}
         {history.map((msg, i) => {
-          const stageMatch = msg.role === 'assistant' && (!busy || i < history.length - 1)
+          const isLast = i === history.length - 1;
+          const streaming = busy && isLast;
+          const stageMatch = msg.role === 'assistant' && !streaming
             ? msg.content?.match(/\[STAGED:(stage-[\w-]+)\]/)
             : null;
+          const isAssistant = msg.role === 'assistant';
           return (
-            <div key={i} className={`chatMsg ${msg.role}`}>
-              <span className="chatRole">{msg.role === 'user' ? 'CMD' : 'MAV'}</span>
-              <span className="chatText">{msg.content || (busy && i === history.length - 1 ? '▋' : '')}</span>
+            <div key={i} className={`chatMsg ${msg.role}`} style={{ position: 'relative' }}>
+              <span className="chatRole">{isAssistant ? 'MAV' : 'CMD'}</span>
+              {isAssistant && msg.content
+                ? <div className="chatText"><MavMarkdown content={msg.content} />{streaming && <span className="streamCursor">▋</span>}</div>
+                : <span className="chatText">{msg.content || (streaming ? '▋' : '')}</span>
+              }
               {stageMatch && <ApplyStagedButton stageId={stageMatch[1]} />}
+              {isAssistant && msg.content && !streaming && (
+                <button className="copyBtn" title="Copy" onClick={() => navigator.clipboard.writeText(msg.content)}>⧉</button>
+              )}
             </div>
           );
         })}
@@ -870,8 +968,11 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
       {attachedFiles?.length > 0 && (
         <div className="attachChips">
           {attachedFiles.map((f, i) => (
-            <span key={i} className={`attachChip${f.type === 'folder' ? ' folderChip' : ''}`}>
-              <span className="attachChipLabel" title={f.path || f.name}>{f.type === 'folder' ? '📁 ' : ''}{f.name.split(/[\\/]/).filter(Boolean).pop() || f.name}{f.type === 'folder' ? '/' : ''}</span>
+            <span key={i} className={`attachChip${f.type === 'folder' ? ' folderChip' : f.type === 'image' ? ' imageChip' : ''}`}>
+              {f.type === 'image'
+                ? <img className="attachChipThumb" src={`data:${f.mimeType};base64,${f.data}`} alt={f.name} />
+                : <span className="attachChipLabel" title={f.path || f.name}>{f.type === 'folder' ? '📁 ' : ''}{f.name.split(/[\\/]/).filter(Boolean).pop() || f.name}{f.type === 'folder' ? '/' : ''}</span>
+              }
               <button type="button" className="attachChipRemove" onClick={() => onRemoveFile(i)}>×</button>
             </span>
           ))}
@@ -890,14 +991,24 @@ function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse
         <div className="chatSessionActions">
           <button type="button" className="attachBtn" onClick={() => fileInputRef.current?.click()} title="Attach files">⊕ FILES</button>
           <button type="button" className="attachBtn" onClick={handleFolderAdd} title="Attach folder by path">⊕ FOLDER</button>
+          <button type="button" className={`micBtn${isListening ? ' active' : ''}`} onClick={toggleVoice} disabled={busy} title="Voice input">
+            {isListening ? '⏹' : '🎤'}
+          </button>
+          <button type="button" className="jobHistoryBtn" onClick={() => setShowJobHistory(v => !v)} title="Saved jobs">📋</button>
           {busy
             ? <button type="button" className="stopBtn" onClick={onStop}>[ STOP ]</button>
             : <button type="submit" className="sendBtn" disabled={!input.trim()}>SEND</button>
           }
           {history.length > 0 && !busy && (
-            <button type="button" className="clearChatBtn" onClick={onClear}>CLR</button>
+            <button type="button" className="clearChatBtn" onClick={handleClear}>CLR</button>
           )}
         </div>
+        {showJobHistory && (
+          <MccJobHistoryPanel
+            onRestore={onRestoreJob}
+            onClose={() => setShowJobHistory(false)}
+          />
+        )}
       </form>
       {showFolderPicker && (
         <FolderPickerModal
@@ -1915,6 +2026,7 @@ function HomePage({ modelStatus }) {
 
 const WORKFLOW_MODES = [
   { id: 'ask',         label: 'ASK MAVERICK',  accent: 'cyan',   tooltip: 'Ask business questions — queries Proxmox RAG knowledge base, falls back to Qwen for general questions when RAG is offline' },
+  { id: 'estimate',    label: 'ESTIMATE',       accent: 'amber',  tooltip: 'Convert a scoped job into a Grizzly estimate — Good/Better/Best pricing, RAG-powered, pushes to HCP' },
   { id: 'build',       label: 'BUILD / FIX',   accent: 'amber',  tooltip: 'Claude plans, Qwen executes — full filesystem access, build or edit any file on any drive' },
   { id: 'ops',         label: 'OPERATIONS',    accent: 'green',  tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
   { id: 'claude-code', label: 'SUPERPOWERS',   accent: 'purple', tooltip: 'Claude Code CLI — direct file editing, shell commands, full tool use. No staging, no approval gates. Runs autonomously.' },
@@ -2059,6 +2171,7 @@ function App() {
               onCollapse: () => setChatExpanded(false),
               onStop: () => chatAbortRef.current?.abort(),
               onClear: () => { pushChat([]); setPreviewContent(null); setAttachedFiles([]); },
+              onRestoreJob: (savedHistory) => { pushChat(savedHistory); setPreviewContent(null); setAttachedFiles([]); },
               workflowMode,
               setWorkflowMode,
               attachedFiles,

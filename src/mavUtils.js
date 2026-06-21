@@ -35,6 +35,27 @@ export function MavMarkdown({ content }) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+
+    // Fenced code blocks
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim();
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      elements.push(
+        React.createElement('pre', { key: `pre-${i}`, className: 'mdPre' },
+          React.createElement('code', { className: `mdPreCode${lang ? ` lang-${lang}` : ''}` },
+            codeLines.join('\n')
+          )
+        )
+      );
+      i++; // skip closing ```
+      continue;
+    }
+
     if (line.startsWith('### ')) {
       elements.push(React.createElement('h3', { key: i, className: 'mdH3' }, line.slice(4)));
     } else if (line.startsWith('## ')) {
