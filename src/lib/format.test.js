@@ -42,6 +42,16 @@ describe('colorFor', () => {
     expect(colorFor(75)).toBe('#d7ba69');
     expect(colorFor(30)).toBe('#75bf72');
   });
+
+  it('respects per-gauge warn/crit thresholds', () => {
+    // RAM scale (80/92): 62% is healthy green, not the default-scale yellow.
+    expect(colorFor(62, 80, 92)).toBe('#75bf72');
+    expect(colorFor(85, 80, 92)).toBe('#d7ba69');
+    expect(colorFor(95, 80, 92)).toBe('#c75050');
+    // CPU scale (85/95): a busy 75% stays green.
+    expect(colorFor(75, 85, 95)).toBe('#75bf72');
+    expect(colorFor(90, 85, 95)).toBe('#d7ba69');
+  });
 });
 
 describe('formatMbps', () => {

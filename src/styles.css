@@ -2027,8 +2027,10 @@ body {
 
 .hardwareLines .staticLink.warn { stroke: rgba(217,191,111,.62); }
 .hardwareLines .staticLink.danger { stroke: rgba(199,80,80,.68); }
+.hardwareLines .staticLink.idle { stroke: rgba(120,132,150,.4); }
 .hardwareLines .flowLink.warn { stroke: var(--yellow); }
 .hardwareLines .flowLink.danger { stroke: var(--red); }
+.hardwareLines .flowLink.idle { stroke: rgba(120,132,150,.5); animation: none; }
 
 .topoPort {
   position: absolute;
@@ -2455,8 +2457,10 @@ body {
 
 .mapLines .staticLink.warn { stroke: rgba(217,191,111,.62); }
 .mapLines .staticLink.danger { stroke: rgba(199,80,80,.68); }
+.mapLines .staticLink.idle { stroke: rgba(120,132,150,.4); }
 .mapLines .flowLink.warn { stroke: var(--yellow); }
 .mapLines .flowLink.danger { stroke: var(--red); }
+.mapLines .flowLink.idle { stroke: rgba(120,132,150,.5); animation: none; }
 
 @keyframes linkFlow {
   from { stroke-dashoffset: 0; }
@@ -2572,6 +2576,11 @@ body {
   box-shadow: 0 0 8px rgba(199,80,80,.55), inset 0 -2px 0 rgba(0,0,0,.4);
 }
 
+.mapPorts i.hot.idle {
+  background: linear-gradient(180deg, #7b8496, #444a55);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.4);
+}
+
 .mapNode .portAnchor {
   position: absolute;
   z-index: 4;
@@ -2592,6 +2601,11 @@ body {
 .mapNode .portAnchor.danger {
   background: var(--red);
   box-shadow: 0 0 12px rgba(199,80,80,.72);
+}
+
+.mapNode .portAnchor.idle {
+  background: #7b8496;
+  box-shadow: 0 0 8px rgba(120,132,150,.5);
 }
 
 .mapNode .portAnchor.port24 {

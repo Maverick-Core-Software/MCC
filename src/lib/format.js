@@ -3,11 +3,14 @@ export function clampPercent(value) {
   return Math.max(0, Math.min(100, value));
 }
 
-export function colorFor(value, palette = 'normal') {
+// Health palette for load/pressure gauges. warn/crit are per-metric because
+// "high" means different things: a CPU spiking to 100% is fine, RAM near full is not.
+// Pass the literal 'network' as warn to get the blue active/idle palette instead.
+export function colorFor(value, warn = 60, crit = 85) {
   if (value == null) return '#4b5260';
-  if (palette === 'network') return value > 0 ? '#5aa8ff' : '#4b5260';
-  if (value >= 85) return '#c75050';
-  if (value >= 60) return '#d7ba69';
+  if (warn === 'network') return value > 0 ? '#5aa8ff' : '#4b5260';
+  if (value >= crit) return '#c75050';
+  if (value >= warn) return '#d7ba69';
   return '#75bf72';
 }
 

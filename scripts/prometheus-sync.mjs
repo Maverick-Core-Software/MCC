@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { PROM_QUERIES } from '../src/config/metrics.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -40,51 +41,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// All PromQL queries — mirror of src/config/metrics.js
-const PROM_QUERIES = {
-  pcCpu: '100 - (avg(rate(windows_cpu_time_total{job="main_pc",mode="idle"}[1m])) * 100)',
-  pcRam: '(1 - windows_memory_physical_free_bytes{job="main_pc"} / windows_memory_physical_total_bytes{job="main_pc"}) * 100',
-  pcRamUsedBytes: 'windows_memory_physical_total_bytes{job="main_pc"} - windows_memory_physical_free_bytes{job="main_pc"}',
-  pcRamTotalBytes: 'windows_memory_physical_total_bytes{job="main_pc"}',
-  pcGpu: 'max(nvidia_smi_utilization_gpu_ratio * 100)',
-  pcGpuMemUsedBytes: 'max(nvidia_smi_memory_used_bytes)',
-  pcGpuMemTotalBytes: 'max(nvidia_smi_memory_total_bytes)',
-  pcDrive: '(1 - windows_logical_disk_free_bytes{job="main_pc",volume="C:"} / windows_logical_disk_size_bytes{job="main_pc",volume="C:"}) * 100',
-  pcDriveCFreeBytes: 'windows_logical_disk_free_bytes{job="main_pc",volume="C:"}',
-  pcDriveCTotalBytes: 'windows_logical_disk_size_bytes{job="main_pc",volume="C:"}',
-  pcDriveCSmart: 'smartmon_device_smart_healthy{job=~"main_pc|smartctl",device=~".*SN7100.*|.*WD.*2T.*|.*C.*"}',
-  pcDriveD: '(1 - windows_logical_disk_free_bytes{job="main_pc",volume="D:"} / windows_logical_disk_size_bytes{job="main_pc",volume="D:"}) * 100',
-  pcDriveDFreeBytes: 'windows_logical_disk_free_bytes{job="main_pc",volume="D:"}',
-  pcDriveDTotalBytes: 'windows_logical_disk_size_bytes{job="main_pc",volume="D:"}',
-  pcDriveDSmart: 'smartmon_device_smart_healthy{job=~"main_pc|smartctl",device=~".*SN7100.*|.*WD.*256.*|.*D.*"}',
-  pcNetIn: 'max(rate(windows_net_bytes_received_total{job="main_pc"}[1m]) * 8 / 1000 / 1000)',
-  pcNetOut: 'max(rate(windows_net_bytes_sent_total{job="main_pc"}[1m]) * 8 / 1000 / 1000)',
-  pcNetDirect: 'max(rate(windows_net_bytes_received_total{job="main_pc",interface="Ethernet 2"}[1m]) * 8 / 1000 / 1000)',
-  serverNetSwitch: 'max(rate(node_network_receive_bytes_total{instance="192.168.1.12:9100",device="eth0"}[1m]) * 8 / 1000 / 1000)',
-  serverNetDirect: 'max(rate(node_network_receive_bytes_total{instance="192.168.1.12:9100",device="eth1"}[1m]) * 8 / 1000 / 1000)',
-  serverCpu: '100 - (avg by (instance) (rate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[1m])) * 100)',
-  serverRam: '(1 - (node_memory_MemAvailable_bytes{job="node_exporter"} / node_memory_MemTotal_bytes{job="node_exporter"})) * 100',
-  rootDisk: '(1 - (node_filesystem_avail_bytes{job="node_exporter",mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{job="node_exporter",mountpoint="/",fstype!~"tmpfs|overlay"})) * 100',
-  serverRootFreeBytes: 'node_filesystem_avail_bytes{job="node_exporter",mountpoint="/",fstype!~"tmpfs|overlay"}',
-  serverRootTotalBytes: 'node_filesystem_size_bytes{job="node_exporter",mountpoint="/",fstype!~"tmpfs|overlay"}',
-  dataDisk: '(1 - (node_filesystem_avail_bytes{job="node_exporter",mountpoint="/data",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{job="node_exporter",mountpoint="/data",fstype!~"tmpfs|overlay"})) * 100',
-  pveLocalLvmFreeBytes: 'mav_pve_storage_avail_bytes{storage="local-lvm"}',
-  pveLocalLvmTotalBytes: 'mav_pve_storage_size_bytes{storage="local-lvm"}',
-  samsungSataFreeBytes: 'node_filesystem_avail_bytes{job="node_exporter",mountpoint="/mnt/samsung-sata",fstype!~"tmpfs|overlay"}',
-  samsungSataTotalBytes: 'node_filesystem_size_bytes{job="node_exporter",mountpoint="/mnt/samsung-sata",fstype!~"tmpfs|overlay"}',
-  pcUp: 'up{instance="192.168.1.10:9182"}',
-  serverUp: 'up{instance="192.168.1.12:9100"}',
-  wanDown: 'rate(att_broadband_ipv4_receive_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000 / 1000',
-  wanUp: 'rate(att_broadband_ipv4_transmit_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000 / 1000',
-  switchPort1Rx: 'netgear_switch_port_rx_mbps{port="1"}',
-  switchPort1Tx: 'netgear_switch_port_tx_mbps{port="1"}',
-  switchPort2Rx: 'netgear_switch_port_rx_mbps{port="2"}',
-  switchPort2Tx: 'netgear_switch_port_tx_mbps{port="2"}',
-  switchPort3Rx: 'netgear_switch_port_rx_mbps{port="3"}',
-  switchPort3Tx: 'netgear_switch_port_tx_mbps{port="3"}',
-  switchPort24Rx: 'rate(att_broadband_ipv4_receive_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000',
-  switchPort24Tx: 'rate(att_broadband_ipv4_transmit_bytes{job="bgw_exporter"}[1m]) * 8 / 1000 / 1000',
-};
+// PromQL queries imported from the single source of truth: src/config/metrics.js
 
 async function queryPrometheus(query) {
   const url = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(query)}`;
