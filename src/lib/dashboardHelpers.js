@@ -88,6 +88,7 @@ export function mccLoadJob(id) {
 
 export const WORKFLOW_MODES = [
   { id: 'ask',         label: 'ASK MAVERICK',  accent: 'cyan',   tooltip: 'Ask business questions, scope jobs, and build estimates — say "build it" when ready to push to HCP' },
+  { id: 'agent',       label: 'MAVERICK AGENT', accent: 'blue',  tooltip: 'Full CRM agent — check messages, look up customers and pricing, check schedule, and take actions in HCP with your approval.' },
   { id: 'build',       label: 'BUILD / FIX',   accent: 'amber',  tooltip: 'Claude plans, Qwen executes — full filesystem access, build or edit any file on any drive' },
   { id: 'ops',         label: 'OPERATIONS',    accent: 'green',  tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
   { id: 'claude-code', label: 'SUPERPOWERS',   accent: 'purple', tooltip: 'Claude Code CLI — direct file editing, shell commands, full tool use. No staging, no approval gates. Runs autonomously.' },

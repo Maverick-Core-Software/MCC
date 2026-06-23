@@ -79,12 +79,12 @@ export function MccJobHistoryPanel({ onRestore, onClose }) {
 }
 
 export function EstimateConfirmBar({ estimate, onBuild, onClear, busy }) {
-  const items = estimate?.items || [];
+  const items = (estimate?.items || []).length + (estimate?.newItems || []).length;
   const customer = estimate?.customer;
   return (
     <div className="estimateConfirmBar">
       <span className="estimateConfirmInfo">
-        📋 <strong>{items.length} item{items.length !== 1 ? 's' : ''}</strong> ready to push
+        📋 <strong>{items} item{items !== 1 ? 's' : ''}</strong> ready to push
         {customer?.name ? ` — ${customer.name}` : ''}
       </span>
       <div className="estimateConfirmActions">

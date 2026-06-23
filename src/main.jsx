@@ -145,8 +145,8 @@ function App() {
   }
 
   async function handleBuildEstimate() {
-    if (!pendingEstimate?.items?.length || chatBusy) return;
-    const { items, customer = {} } = pendingEstimate;
+    if ((!pendingEstimate?.items?.length && !pendingEstimate?.newItems?.length) || chatBusy) return;
+    const { items = [], newItems = [], customer = {}, techIds, depositPercent } = pendingEstimate;
     setPendingEstimate(null);
     setChatBusy(true);
     setChatPanelOpen(true);
@@ -158,7 +158,15 @@ function App() {
       const response = await fetch(api('/api/chat'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Build estimate', mode: 'estimate-ready', lineItems: items, pendingCustomer: customer }),
+        body: JSON.stringify({
+          prompt: 'Build estimate',
+          mode: 'estimate-ready',
+          lineItems: items,
+          newPricebookItems: newItems.length ? newItems : undefined,
+          pendingCustomer: customer,
+          techIds: techIds?.length ? techIds : undefined,
+          depositPercent: depositPercent ?? undefined,
+        }),
         signal: controller.signal
       });
       const reader = response.body.getReader();

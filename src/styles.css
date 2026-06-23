@@ -6386,3 +6386,11 @@ code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
 .jobPanelItem:hover { background: rgba(102,212,255,.07); }
 .jobPanelLabel { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jobPanelTs { margin-left: 10px; font-size: 10.5px; color: rgba(180,200,230,.4); flex-shrink: 0; }
+
+.workflowBtn.active.blue {
+  color: #6b9ed8;
+  border-color: rgba(107, 158, 216, .65);
+  background: rgba(59, 103, 168, .12);
+  box-shadow: 0 0 12px rgba(107, 158, 216, .22), inset 0 0 10px rgba(59, 103, 168, .06);
+  text-shadow: 0 0 8px rgba(107, 158, 216, .7);
+}
