@@ -6458,3 +6458,65 @@ code, pre, .gaugeValue, .gaugeLabel, .gaugeSub, .panelTitle,
 .voiceLine.user .voiceRole { color: rgba(100,200,255,0.7); }
 .voiceLine.assistant .voiceRole { color: rgba(0,220,100,0.7); }
 .voiceText { font-size: 13px; color: rgba(255,255,255,0.85); line-height: 1.45; }
+.voicePanelStatus[data-status="idle"]        { color: rgba(0,220,100,0.7); }
+.voicePanelStatus[data-status="submitting"]  { color: #88ddff; }
+.voicePanelStatus[data-status="thinking"]    { color: #ffb347; animation: pulse 1.2s infinite; }
+.voicePanelStatus[data-status="interrupted"] { color: #ff8844; }
+.voicePanelStatus[data-status="unavailable"] { color: rgba(255,255,255,0.4); }
+.voicePanelHeaderActions { display: flex; align-items: center; gap: 4px; }
+.voicePanelBtn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.7);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.voicePanelBtn:hover { background: rgba(255,255,255,0.15); }
+.voicePanelBtn.voiceBtnOff { color: rgba(255,255,255,0.35); }
+.voiceInterim .voiceText { color: rgba(255,255,255,0.45); font-style: italic; }
+.voiceEstimateBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: rgba(0,200,80,0.07);
+  border-top: 1px solid rgba(0,200,80,0.15);
+  gap: 8px;
+}
+.voiceEstimateInfo { font-size: 12px; color: rgba(255,255,255,0.7); }
+.voiceEstimateBuild {
+  background: rgba(0,200,80,0.2);
+  border: 1px solid rgba(0,220,100,0.4);
+  color: #00ff88;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.voiceEstimateBuild:hover { background: rgba(0,200,80,0.35); }
+.voiceEstimateBuild:disabled { opacity: 0.4; cursor: not-allowed; }
+.voiceManualSend {
+  padding: 6px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  justify-content: flex-end;
+}
+.voiceManualSendBtn {
+  background: rgba(100,200,255,0.1);
+  border: 1px solid rgba(100,200,255,0.25);
+  color: rgba(100,200,255,0.8);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.voiceManualSendBtn:hover { background: rgba(100,200,255,0.2); }

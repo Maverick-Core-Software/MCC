@@ -50,11 +50,7 @@ function App() {
     });
   }
 
-  async function handleChatSubmit(e) {
-    e.preventDefault();
-    if (!chatInput.trim() || chatBusy) return;
-    const userMsg = chatInput.trim();
-    setChatInput('');
+  async function _submitChat(userMsg) {
     setChatBusy(true);
     setChatPanelOpen(true);
     pushChat(prev => [...prev, { role: 'user', content: userMsg }, { role: 'assistant', content: '' }]);
@@ -142,6 +138,20 @@ function App() {
       setChatBusy(false);
       chatAbortRef.current = null;
     }
+  }
+
+  async function handleChatSubmit(e) {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text || chatBusy) return;
+    setChatInput('');
+    await _submitChat(text);
+  }
+
+  function submitText(text) {
+    const trimmed = text?.trim();
+    if (!trimmed || chatBusy) return;
+    _submitChat(trimmed);
   }
 
   async function handleBuildEstimate() {
@@ -241,6 +251,7 @@ function App() {
               onSubmit: handleChatSubmit,
               onCollapse: () => setChatExpanded(false),
               onStop: () => chatAbortRef.current?.abort(),
+              submitText,
               onClear: () => { pushChat([]); setPreviewContent(null); setAttachedFiles([]); },
               onRestoreJob: (savedHistory) => { pushChat(savedHistory); setPreviewContent(null); setAttachedFiles([]); },
               workflowMode,

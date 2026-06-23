@@ -98,7 +98,7 @@ export function EstimateConfirmBar({ estimate, onBuild, onClear, busy }) {
   );
 }
 
-export function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onCollapse, onStop, onClear, onRestoreJob, workflowMode, setWorkflowMode, attachedFiles, onAddFiles, onRemoveFile, permanent, pendingEstimate, onBuildEstimate, onClearPendingEstimate }) {
+export function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onSubmitText, onCollapse, onStop, onClear, onRestoreJob, workflowMode, setWorkflowMode, attachedFiles, onAddFiles, onRemoveFile, permanent, pendingEstimate, onBuildEstimate, onClearPendingEstimate }) {
   const historyRef = useRef(null);
   const rafRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -241,8 +241,17 @@ export function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onC
           busy={busy}
         />
       )}
-      {/* Voice panel hidden — OpenAI Realtime API access pending */}
-      {false && showVoicePanel && <VoicePanel onClose={() => setShowVoicePanel(false)} />}
+      {showVoicePanel && (
+        <VoicePanel
+          onClose={() => setShowVoicePanel(false)}
+          onSubmitText={onSubmitText}
+          onStop={onStop}
+          onBuildEstimate={onBuildEstimate}
+          pendingEstimate={pendingEstimate}
+          busy={busy}
+          lastAssistantText={history.filter(m => m.role === 'assistant').pop()?.content || ''}
+        />
+      )}
       <form className="chatSessionForm" onSubmit={onSubmit}>
         <textarea
           className="chatSessionInput"
@@ -259,7 +268,7 @@ export function ChatSessionPanel({ history, busy, input, setInput, onSubmit, onC
           <button type="button" className={`micBtn${isListening ? ' active' : ''}`} onClick={toggleVoice} disabled={busy} title="Voice input">
             {isListening ? '⏹' : '🎤'}
           </button>
-          {/* 🎙 VOICE button hidden — OpenAI Realtime API access pending */}
+          <button type="button" className="voiceCallBtn" onClick={() => setShowVoicePanel(v => !v)} title="Voice session" disabled={busy}>🎙 VOICE</button>
           <button type="button" className="jobHistoryBtn" onClick={() => setShowJobHistory(v => !v)} title="Saved jobs">📋</button>
           {busy
             ? <button type="button" className="stopBtn" onClick={onStop}>[ STOP ]</button>
@@ -352,6 +361,7 @@ export function OrchestratorPage({ modelStatus, chatSession }) {
         input={chatSession.input}
         setInput={chatSession.setInput}
         onSubmit={chatSession.onSubmit}
+        onSubmitText={chatSession.submitText}
         onCollapse={chatSession.onCollapse}
         onStop={chatSession.onStop}
         onClear={chatSession.onClear}
