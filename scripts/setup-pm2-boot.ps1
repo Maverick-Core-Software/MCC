@@ -24,9 +24,12 @@ $ErrorActionPreference = 'Stop'
 # --- Review these -------------------------------------------------------------
 $TaskName  = 'PM2 Resurrect On Boot'
 $RunAsUser = "$env:USERDOMAIN\$env:USERNAME"   # the account whose PM2 home holds the saved dump
-# Resolve the pm2 CLI (npm global shim). Override if pm2 lives elsewhere.
-$Pm2Cmd = (Get-Command pm2 -ErrorAction SilentlyContinue)?.Source
-if (-not $Pm2Cmd) { $Pm2Cmd = Join-Path $env:APPDATA 'npm\pm2.cmd' }
+# Resolve the pm2 CLI — prefer .cmd so Task Scheduler can invoke it without pwsh.
+$Pm2Cmd = Join-Path $env:APPDATA 'npm\pm2.cmd'
+if (-not (Test-Path $Pm2Cmd)) {
+    $resolved = Get-Command pm2 -ErrorAction SilentlyContinue
+    $Pm2Cmd = if ($resolved) { $resolved.Source } else { $null }
+}
 if (-not (Test-Path $Pm2Cmd)) { throw "Could not find pm2. Install with: npm i -g pm2  (looked at $Pm2Cmd)" }
 # ------------------------------------------------------------------------------
 
