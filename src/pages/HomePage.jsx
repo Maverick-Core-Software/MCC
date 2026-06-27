@@ -28,22 +28,25 @@ export function HomePage({ modelStatus }) {
     const reportTime = new Date(report.updatedAt).getTime();
     return Number.isFinite(reportTime) && reportTime >= sevenDaysAgoMs;
   });
+  const STATUS_BUCKETS = ['pending', 'in_process', 'completed', 'failed'];
   const upcomingActions = actions
     .filter((action) => {
-      const status = String(action.status || '').toLowerCase();
-      const done = String(action.completion?.completion_status || '').toLowerCase() === 'complete'
-        || String(action.completion?.definition_of_done || '').toLowerCase() === 'yes';
-      return !done && !['dry_run_ready', 'complete', 'completed', 'verified'].includes(status);
+      const s = String(action.status || '').toLowerCase();
+      // Active + recent failures: hide completed (collapsed separately).
+      return STATUS_BUCKETS.includes(s) ? s !== 'completed' : true;
     })
     .sort((a, b) => {
-      const rank = { needs_approval: 0, approved: 1, blocked_access: 2, needs_verification: 2, needs_review: 3 };
+      const rank = { failed: 0, in_process: 1, pending: 2, completed: 3 };
       return (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
     });
+  const completedActions = actions.filter((a) => String(a.status).toLowerCase() === 'completed');
   const runHealth = seoWorkflow.runHealth || null;
   const failedPhases = runHealth
     ? Object.entries(runHealth).filter(([, v]) => v?.status === 'failed')
     : [];
+  const bridgeAlerts = actionQueue?.alerts || [];
   const faults = [
+    ...bridgeAlerts.map((al) => `${al.title}${al.detail ? ' — ' + al.detail : ''}`),
     ...(seoWorkflow.faults || []),
     ...(actionQueue?.error ? [actionQueue.error] : []),
     ...(orchestratorStatus.error ? [orchestratorStatus.error] : [])
@@ -78,45 +81,42 @@ export function HomePage({ modelStatus }) {
     }
   }
 
+  const STATUS_BADGE = {
+    pending: { label: 'PENDING', color: '#f59e0b' },
+    in_process: { label: 'IN PROCESS', color: '#6366f1' },
+    completed: { label: 'COMPLETED', color: '#10b981' },
+    failed: { label: 'FAILED', color: '#ef4444' },
+  };
+  const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
+  const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
+
   function renderActionRow(action) {
     const isBusy = actionBusyId === action.id;
-    const isApproved = action.status === 'approved' || Boolean(action.approval);
-    const canApprove = action.status === 'needs_approval' && action.approval_required && !action.approval;
+    const isApproved = action.status === 'pending' && Boolean(action.approval);
+    const canApprove = action.status === 'pending' && action.approval_required && !action.approval;
     const canRunLive = Boolean(action.live_adapter) && isApproved;
     const canApproveAndRun = Boolean(action.live_adapter) && canApprove;
+    const badge = STATUS_BADGE[action.status] || STATUS_BADGE.pending;
+    const media = action.media_status && action.media_status !== 'n/a' ? MEDIA_ICON[action.media_status] : null;
 
     return (
       <div className="actionRow actionQueueRow" key={action.id}>
         <div>
           <strong>{action.title}</strong>
-          <span>{action.status} / {action.platform} / {action.risk}</span>
-          <em>{action.assigned_agent}</em>
+          <span className="actionDesc">{action.description}</span>
+          <span>
+            <em style={{ color: badge.color }}>{badge.label}</em>
+            {' · '}<em style={{ color: PRIORITY_COLOR[action.priority] || '#6b7280' }}>{(action.priority || 'medium').toUpperCase()}</em>
+            {' · '}{action.assigned_agent}
+            {media ? <> {' · '}{media}</> : null}
+          </span>
+          {action.error ? <span className="actionError" title={action.error}>{action.error}</span> : null}
         </div>
         <div className="actionButtons">
-          <button type="button" disabled={isBusy} onClick={() => handleDryRunAction(action.id)}>
-            Dry Run
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || !canApprove}
-            onClick={() => handleApproveAction(action.id)}
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || !canApproveAndRun}
-            onClick={() => handleApproveAndRunAction(action.id)}
-          >
-            Approve + Run
-          </button>
-          <button
-            type="button"
-            disabled={isBusy || !canRunLive}
-            onClick={() => handleLiveRunAction(action.id)}
-          >
-            Run Live
-          </button>
+          <button type="button" disabled={isBusy} onClick={() => handleDryRunAction(action.id)}>Dry Run</button>
+          <button type="button" disabled={isBusy || !canApprove} onClick={() => handleApproveAction(action.id)}>Approve</button>
+          <button type="button" disabled={isBusy || !canApproveAndRun} onClick={() => handleApproveAndRunAction(action.id)}>Approve + Run</button>
+          <button type="button" disabled={isBusy || !canRunLive} onClick={() => handleLiveRunAction(action.id)}>Run Live</button>
         </div>
       </div>
     );
@@ -331,6 +331,9 @@ export function HomePage({ modelStatus }) {
               </div>
               <div className="actionList compactList">
                 {visibleActions.map(renderActionRow)}
+                {completedActions.length > 0 ? (
+                  <div className="completedCount">✓ {completedActions.length} completed (last 48h)</div>
+                ) : null}
                 {!upcomingActions.length ? <div className="emptyPlan">No upcoming actions detected.</div> : null}
                 {actionResult ? (
                   <div className={actionResult.kind === 'error' ? 'actionResult error' : 'actionResult'}>
