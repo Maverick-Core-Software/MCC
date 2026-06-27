@@ -8,6 +8,15 @@ import { workerLabel } from '../lib/dashboardHelpers.js';
 
 const STATUS_BUCKETS = ['pending', 'in_process', 'completed', 'failed'];
 
+const STATUS_BADGE = {
+  pending: { label: 'PENDING', color: '#f59e0b' },
+  in_process: { label: 'IN PROCESS', color: '#6366f1' },
+  completed: { label: 'COMPLETED', color: '#10b981' },
+  failed: { label: 'FAILED', color: '#ef4444' },
+};
+const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
+const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
+
 export function HomePage({ modelStatus }) {
   const orchestratorStatus = useOrchestratorStatus();
   const seoWorkflow = useSeoWorkflow();
@@ -81,15 +90,6 @@ export function HomePage({ modelStatus }) {
       setActionQueue((current) => ({ ...(current || {}), error: error.message }));
     }
   }
-
-  const STATUS_BADGE = {
-    pending: { label: 'PENDING', color: '#f59e0b' },
-    in_process: { label: 'IN PROCESS', color: '#6366f1' },
-    completed: { label: 'COMPLETED', color: '#10b981' },
-    failed: { label: 'FAILED', color: '#ef4444' },
-  };
-  const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
-  const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
 
   function renderActionRow(action) {
     const isBusy = actionBusyId === action.id;

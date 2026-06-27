@@ -4,6 +4,15 @@ import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, quer
 const TYPE_LABEL = { seo_run: 'SEO RUN', website_task: 'WEBSITE TASK', social_post: 'SOCIAL POST' };
 const STATE_COLOR = { pending_approval: '#f59e0b', needs_approval: '#f59e0b', approved: '#10b981', executing: '#6366f1', complete: '#10b981', needs_verification: '#ef4444', error: '#ef4444', 'not-configured': '#6b7280' };
 
+const STATUS_BADGE = {
+  pending: { label: 'PENDING', color: '#f59e0b' },
+  in_process: { label: 'IN PROCESS', color: '#6366f1' },
+  completed: { label: 'COMPLETED', color: '#10b981' },
+  failed: { label: 'FAILED', color: '#ef4444' },
+};
+const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
+const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
+
 const POST_STATUS_COLOR = { posted: '#10b981', done: '#10b981', scheduled: '#06b6d4', approved: '#6366f1', pending_approval: '#f59e0b', posting: '#8b5cf6', needs_verification: '#ef4444', error: '#ef4444' };
 const POST_STATUS_LABEL = { posted: 'POSTED', done: 'POSTED', scheduled: 'SCHEDULED', approved: 'QUEUED', pending_approval: 'PENDING', posting: 'POSTING…', needs_verification: 'NEEDS VERIFY', error: 'ERROR' };
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -213,15 +222,6 @@ function ActionCard({ action, onApprove, onRun, busy }) {
       setRunning(false);
     }
   };
-
-  const STATUS_BADGE = {
-    pending: { label: 'PENDING', color: '#f59e0b' },
-    in_process: { label: 'IN PROCESS', color: '#6366f1' },
-    completed: { label: 'COMPLETED', color: '#10b981' },
-    failed: { label: 'FAILED', color: '#ef4444' },
-  };
-  const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
-  const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
 
   const isPending = action.status === 'pending';
   const canApprove = action.status === 'pending' && action.approval_required && !action.approval;
