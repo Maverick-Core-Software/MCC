@@ -15,3 +15,4 @@ tmp/
 .mav-console/
 /app/
 src/lib/build-test.js
+INVESTIGATION_*.md
