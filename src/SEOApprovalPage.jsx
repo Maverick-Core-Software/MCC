@@ -4,6 +4,15 @@ import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, quer
 const TYPE_LABEL = { seo_run: 'SEO RUN', website_task: 'WEBSITE TASK', social_post: 'SOCIAL POST' };
 const STATE_COLOR = { pending_approval: '#f59e0b', needs_approval: '#f59e0b', approved: '#10b981', executing: '#6366f1', complete: '#10b981', needs_verification: '#ef4444', error: '#ef4444', 'not-configured': '#6b7280' };
 
+const STATUS_BADGE = {
+  pending: { label: 'PENDING', color: '#f59e0b' },
+  in_process: { label: 'IN PROCESS', color: '#6366f1' },
+  completed: { label: 'COMPLETED', color: '#10b981' },
+  failed: { label: 'FAILED', color: '#ef4444' },
+};
+const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
+const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
+
 const POST_STATUS_COLOR = { posted: '#10b981', done: '#10b981', scheduled: '#06b6d4', approved: '#6366f1', pending_approval: '#f59e0b', posting: '#8b5cf6', needs_verification: '#ef4444', error: '#ef4444' };
 const POST_STATUS_LABEL = { posted: 'POSTED', done: 'POSTED', scheduled: 'SCHEDULED', approved: 'QUEUED', pending_approval: 'PENDING', posting: 'POSTING…', needs_verification: 'NEEDS VERIFY', error: 'ERROR' };
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -214,36 +223,48 @@ function ActionCard({ action, onApprove, onRun, busy }) {
     }
   };
 
-  const isPending = action.status === 'needs_approval' || action.status === 'pending_approval';
-  const color = STATE_COLOR[action.status] || '#6b7280';
+  const isPending = action.status === 'pending';
+  const canApprove = action.status === 'pending' && action.approval_required && !action.approval;
+  const isApproved = action.status === 'pending' && Boolean(action.approval);
+  const badge = STATUS_BADGE[action.status] || STATUS_BADGE.pending;
+  const media = action.media_status && action.media_status !== 'n/a' ? MEDIA_ICON[action.media_status] : null;
 
   return (
     <div style={{ background: '#1a1d26', border: `1px solid ${isPending ? '#f59e0b33' : '#2a2f45'}`, borderRadius: 8, padding: '14px 18px', marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <StatusBadge label={TYPE_LABEL[action.type] || action.type} color="#6b7280" />
-        <span style={{ color: '#f1f5f9', fontWeight: 600, flex: 1, fontSize: 14 }}>{action.label}</span>
-        {action.posts_count != null && (
-          <span style={{ color: '#6b7280', fontSize: 12 }}>{action.posts_count} posts</span>
-        )}
-        <StatusBadge label={(action.status || '').replace(/_/g, ' ')} color={color} />
+        <span style={{ color: '#f1f5f9', fontWeight: 600, flex: 1, fontSize: 14 }}>{action.title}</span>
+        {action.priority && <StatusBadge label={action.priority} color={PRIORITY_COLOR[action.priority] || '#6b7280'} />}
+        <StatusBadge label={badge.label} color={badge.color} />
       </div>
+      <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 6 }}>{action.description}</div>
+      <div style={{ color: '#6b7280', fontSize: 11, marginTop: 4 }}>
+        {action.assigned_agent}{media ? ` · ${media}` : ''}{action.posts_count != null ? ` · ${action.posts_count} posts` : ''}
+      </div>
+      {action.error && (
+        <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }} title={action.error}>{action.error}</div>
+      )}
 
-      {isPending && (
+      {(canApprove || (isApproved && Boolean(action.live_adapter))) && (
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button
-            onClick={handleApprove}
-            disabled={approving || running || busy}
-            style={{ flex: 1, padding: '9px 0', background: approving ? '#2a2f45' : '#10b981', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer' }}
-          >
-            {approving ? 'Approving...' : '✓ APPROVE'}
-          </button>
-          <button
-            onClick={handleRun}
-            disabled={approving || running || busy}
-            style={{ flex: 1, padding: '9px 0', background: running ? '#2a2f45' : '#6366f1', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer' }}
-          >
-            {running ? 'Running...' : '▶ RUN NOW'}
-          </button>
+          {canApprove && (
+            <button
+              onClick={handleApprove}
+              disabled={approving || running || busy}
+              style={{ flex: 1, padding: '9px 0', background: approving ? '#2a2f45' : '#10b981', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer' }}
+            >
+              {approving ? 'Approving...' : '✓ APPROVE'}
+            </button>
+          )}
+          {isApproved && Boolean(action.live_adapter) && (
+            <button
+              onClick={handleRun}
+              disabled={approving || running || busy}
+              style={{ flex: 1, padding: '9px 0', background: running ? '#2a2f45' : '#6366f1', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer' }}
+            >
+              {running ? 'Running...' : '▶ RUN LIVE'}
+            </button>
+          )}
         </div>
       )}
 
@@ -293,6 +314,7 @@ function TaskActivity({ tasks }) {
 export default function SEOApprovalPage() {
   const [workflow, setWorkflow] = useState(null);
   const [actions, setActions] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [weekPosts, setWeekPosts] = useState(null);
   const [taskLog, setTaskLog] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -308,6 +330,7 @@ export default function SEOApprovalPage() {
       const [wf, ac, wp, tl] = await Promise.all([querySeoWorkflow(), querySeoActions(), querySeoWeekPosts(), querySeoTaskLog().catch(() => ({ tasks: [] }))]);
       setWorkflow(wf);
       setActions(ac.actions || []);
+      setAlerts(ac.alerts || []);
       setWeekPosts(wp);
       setTaskLog(tl.tasks || []);
       setError(null);
@@ -361,8 +384,9 @@ export default function SEOApprovalPage() {
   }, [load]);
 
   const stateColor = STATE_COLOR[workflow?.state] || '#6b7280';
-  const pendingActions = actions.filter(a => a.status === 'needs_approval' || a.status === 'pending_approval');
-  const otherActions = actions.filter(a => a.status !== 'needs_approval' && a.status !== 'pending_approval');
+  const pendingActions = actions.filter(a => a.status === 'pending');
+  const otherActions = actions.filter(a => a.status !== 'pending' && a.status !== 'completed');
+  const completedActions = actions.filter(a => a.status === 'completed');
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 920, margin: '0 auto' }}>
@@ -398,7 +422,7 @@ export default function SEOApprovalPage() {
             {[
               { label: 'Pending Approval', value: pendingActions.length, color: '#f59e0b' },
               { label: 'Reports Generated', value: workflow.activeWorkflow?.reportsGenerated ?? 0, color: '#10b981' },
-              { label: 'Faults', value: (workflow.faults || []).length, color: '#ef4444' },
+              { label: 'Alerts', value: alerts.length + (workflow.faults || []).length, color: '#ef4444' },
             ].map(s => (
               <div key={s.label} style={{ background: '#1a1d26', border: '1px solid #2a2f45', borderRadius: 8, padding: '12px 18px', flex: 1, textAlign: 'center' }}>
                 <div style={{ color: s.color, fontSize: 22, fontWeight: 700 }}>{s.value}</div>
@@ -407,11 +431,16 @@ export default function SEOApprovalPage() {
             ))}
           </div>
 
-          {/* Faults */}
-          {(workflow.faults || []).length > 0 && (
+          {/* Alerts — same deduped list the HomePage banner uses (no double alert) */}
+          {(alerts.length > 0 || (workflow.faults || []).length > 0) && (
             <div style={{ background: '#ef444411', border: '1px solid #ef444433', borderRadius: 8, padding: '10px 14px', marginBottom: 20 }}>
-              {workflow.faults.map((f, i) => (
-                <div key={i} style={{ color: '#ef4444', fontSize: 12, marginBottom: i < workflow.faults.length - 1 ? 4 : 0 }}>⚠ {f}</div>
+              {alerts.map((a) => (
+                <div key={a.id} style={{ color: a.severity === 'warn' ? '#f59e0b' : '#ef4444', fontSize: 12, marginBottom: 4 }}>
+                  ⚠ {a.title}{a.detail ? ` — ${a.detail}` : ''}
+                </div>
+              ))}
+              {(workflow.faults || []).map((f, i) => (
+                <div key={`wf-${i}`} style={{ color: '#ef4444', fontSize: 12 }}>⚠ {f}</div>
               ))}
             </div>
           )}
@@ -480,9 +509,15 @@ export default function SEOApprovalPage() {
             </>
           )}
 
-          {pendingActions.length === 0 && otherActions.length === 0 && (
+          {pendingActions.length === 0 && otherActions.length === 0 && completedActions.length === 0 && (
             <div style={{ color: '#6b7280', textAlign: 'center', padding: 60 }}>
               No pending actions. Pipeline is idle or already approved.
+            </div>
+          )}
+
+          {completedActions.length > 0 && (
+            <div style={{ color: '#10b981', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '20px 0 0' }}>
+              ✓ {completedActions.length} completed (last 48h)
             </div>
           )}
 

@@ -80,8 +80,17 @@ module.exports = {
       interpreter: 'C:\\Users\\carte\\AppData\\Local\\Programs\\Python\\Python312\\python.exe',
       watch: false,
       autorestart: true,
-      max_restarts: 999,
-      restart_delay: 5000,
+      // Crash-loop guard. max_restarts: 999 + no min_uptime let this agent hammer
+      // every 5s forever when it couldn't bind port 7331 (a prior orphaned copy
+      // held it), spawning a swarm of dead python procs. Now: must stay up 20s to
+      // count as stable; restarts back off exponentially (2s,4s,8s…) instead of a
+      // fixed 5s; after 15 fast failures PM2 gives up (status: errored) instead of
+      // looping. kill_timeout gives python time to release the socket on SIGINT
+      // before SIGKILL, so it stops leaving orphans that block the next bind.
+      max_restarts: 15,
+      min_uptime: '20s',
+      exp_backoff_restart_delay: 2000,
+      kill_timeout: 5000,
       env_file: 'C:\\Workspace\\Shared\\Agents\\HomeLab-Agent\\.env',
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       windowsHide: true,
