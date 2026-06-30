@@ -71,6 +71,17 @@ export async function proxySeoActions(req, res, action) {
         throw err;
       }
     }
+    if (action === 'dismiss') {
+      let result;
+      try {
+        result = await callSeoApp('/seo/actions/dismiss', { method: 'POST', body: payload, timeoutMs: 30_000 });
+        logSeoEvent(actionId, label, type, 'dismissed', true, result.message || 'Dismissed');
+        sendJson(res, 200, result);
+      } catch (err) {
+        logSeoEvent(actionId, label, type, 'dismissed', false, err.message);
+        throw err;
+      }
+    }
   } catch (error) {
     sendJson(res, 500, { error: error.message, source: 'seo-app' });
   }

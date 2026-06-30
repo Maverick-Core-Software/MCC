@@ -171,6 +171,17 @@ export async function approveFacebookDay1Prompt(prompt) {
   return response.json();
 }
 
+export async function dismissSeoAction(actionId, label = '', type = '') {
+  const response = await fetch(api('/api/workflows/seo/actions/dismiss'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ actionId, label, type })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `SEO dismiss failed: ${response.status}`);
+  return payload;
+}
+
 export async function runSeoAction(actionId, label = '', type = '', live = false) {
   const response = await fetch(api('/api/workflows/seo/actions/run'), {
     method: 'POST',

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, querySeoWeekPosts, querySeoTaskLog, generateFacebookSchedule, api } from './lib/api.js';
+import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, dismissSeoAction, querySeoWeekPosts, querySeoTaskLog, generateFacebookSchedule, api } from './lib/api.js';
 
 const TYPE_LABEL = { seo_run: 'SEO RUN', website_task: 'WEBSITE TASK', social_post: 'SOCIAL POST' };
 const STATE_COLOR = { pending_approval: '#f59e0b', needs_approval: '#f59e0b', approved: '#10b981', executing: '#6366f1', complete: '#10b981', needs_verification: '#ef4444', error: '#ef4444', 'not-configured': '#6b7280' };
@@ -13,8 +13,8 @@ const STATUS_BADGE = {
 const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
 const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
 
-const POST_STATUS_COLOR = { posted: '#10b981', done: '#10b981', scheduled: '#06b6d4', approved: '#6366f1', pending_approval: '#f59e0b', posting: '#8b5cf6', needs_verification: '#ef4444', error: '#ef4444' };
-const POST_STATUS_LABEL = { posted: 'POSTED', done: 'POSTED', scheduled: 'SCHEDULED', approved: 'QUEUED', pending_approval: 'PENDING', posting: 'POSTING…', needs_verification: 'NEEDS VERIFY', error: 'ERROR' };
+const POST_STATUS_COLOR = { posted: '#10b981', done: '#10b981', scheduled: '#06b6d4', approved: '#6366f1', pending_approval: '#f59e0b', posting: '#8b5cf6', skipped: '#4b5563', needs_verification: '#ef4444', error: '#ef4444' };
+const POST_STATUS_LABEL = { posted: 'POSTED', done: 'POSTED', scheduled: 'SCHEDULED', approved: 'QUEUED', pending_approval: 'PENDING', posting: 'POSTING…', skipped: 'SKIPPED', needs_verification: 'NEEDS VERIFY', error: 'ERROR' };
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function clean(str) {
@@ -193,7 +193,22 @@ function StatusBadge({ label, color }) {
 function ActionCard({ action, onApprove, onRun, busy }) {
   const [approving, setApproving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
   const [result, setResult] = useState(null);
+
+  const handleDismiss = async () => {
+    setDismissing(true);
+    setResult(null);
+    try {
+      const res = await dismissSeoAction(action.id, action.title || '', action.type);
+      setResult({ ok: true, msg: res.message || 'Task skipped.' });
+      onApprove?.();
+    } catch (err) {
+      setResult({ ok: false, msg: err.message });
+    } finally {
+      setDismissing(false);
+    }
+  };
 
   const handleApprove = async () => {
     setApproving(true);
@@ -250,16 +265,25 @@ function ActionCard({ action, onApprove, onRun, busy }) {
           {canApprove && (
             <button
               onClick={handleApprove}
-              disabled={approving || running || busy}
+              disabled={approving || running || dismissing || busy}
               style={{ flex: 1, padding: '9px 0', background: approving ? '#2a2f45' : '#10b981', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer' }}
             >
               {approving ? 'Approving...' : '✓ APPROVE'}
             </button>
           )}
+          {canApprove && (action.type === 'website_task' || action.type === 'weekly_post') && (
+            <button
+              onClick={handleDismiss}
+              disabled={approving || running || dismissing || busy}
+              style={{ padding: '9px 14px', background: 'transparent', border: '1px solid #2a2f45', borderRadius: 6, color: '#6b7280', fontSize: 13, fontWeight: 700, cursor: dismissing ? 'not-allowed' : 'pointer' }}
+            >
+              {dismissing ? '...' : '✕ SKIP'}
+            </button>
+          )}
           {isApproved && Boolean(action.live_adapter) && (
             <button
               onClick={handleRun}
-              disabled={approving || running || busy}
+              disabled={approving || running || dismissing || busy}
               style={{ flex: 1, padding: '9px 0', background: running ? '#2a2f45' : '#6366f1', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer' }}
             >
               {running ? 'Running...' : '▶ RUN LIVE'}

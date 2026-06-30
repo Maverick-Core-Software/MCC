@@ -168,6 +168,10 @@ const server = http.createServer(async (req, res) => {
     await proxySeoActions(req, res, 'run');
     return;
   }
+  if (url.pathname === '/api/workflows/seo/actions/dismiss' && req.method === 'POST') {
+    await proxySeoActions(req, res, 'dismiss');
+    return;
+  }
   if (url.pathname === '/api/workflows/seo/posts/week') {
     try {
       sendJson(res, 200, await callSeoApp('/seo/posts/week', { timeoutMs: 10_000 }));
