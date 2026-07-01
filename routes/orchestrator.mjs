@@ -18,8 +18,8 @@ function fallbackPlan(idea, rawText = '') {
       {
         id: 'task-1',
         title: 'Scout existing workspace',
-        worker: 'local-qwen',
-        reason: 'Cheap, fast read-only inspection before edits.',
+        worker: 'claude-workhorse',
+        reason: 'Fast read-only inspection before edits.',
         status: 'ready'
       },
       {
@@ -56,11 +56,13 @@ function parsePlan(idea, rawText) {
 }
 
 function workerIds() {
-  return ['local-qwen', 'seo-app', 'codex-review', 'claude-cli', 'rag-server'];
+  return ['claude-workhorse', 'seo-app', 'codex-review', 'claude-cli', 'rag-server'];
 }
 
 function normalizeWorker(worker) {
-  return workerIds().includes(worker) ? worker : 'local-qwen';
+  // legacy alias kept for old ledger entries
+  if (worker === 'local-qwen') return 'claude-workhorse';
+  return workerIds().includes(worker) ? worker : 'claude-workhorse';
 }
 
 export async function getOrchestratorStatus(res) {
@@ -71,7 +73,7 @@ export async function getOrchestratorStatus(res) {
     updatedAt: orchestratorState.updatedAt,
     workers: [
       {
-        id: 'local-qwen',
+        id: 'claude-workhorse',
         label: 'Claude (Anthropic)',
         role: 'fast planner and coding brief',
         cost: 'api',
@@ -131,13 +133,13 @@ Return only JSON with this shape:
 {
   "summary": "one sentence",
   "tasks": [
-    { "id": "task-1", "title": "short action", "worker": "local-qwen|codex-review|claude-cli|rag-server", "reason": "why this worker", "status": "ready|queued" }
+    { "id": "task-1", "title": "short action", "worker": "claude-workhorse|codex-review|claude-cli|rag-server", "reason": "why this worker", "status": "ready|queued" }
   ],
   "verification": ["short verification step"]
 }
 
 Rules:
-- Route planning, coding briefs, and implementation to local-qwen.
+- Route planning, coding briefs, and implementation to claude-workhorse.
 - Route architecture review and quality checks to codex-review.
 - Use claude-cli only for a specialist implementation pass.
 - Use rag-server only when project memory or prior context matters.
@@ -239,8 +241,8 @@ export async function createTaskRun(req, res) {
     let output = '';
     let stderr = '';
     let durationMs = null;
-    if (worker === 'local-qwen') {
-      const prompt = `You are the local Qwen coding worker inside mav-console.
+    if (worker === 'claude-workhorse') {
+      const prompt = `You are the Claude coding worker inside mav-console.
 
 Product idea:
 ${idea}
@@ -291,7 +293,7 @@ Do not claim you changed files.`;
 
 function workerLabelForServer(worker) {
   const labels = {
-    'local-qwen': 'Local Qwen',
+    'claude-workhorse': 'Claude (Anthropic)',
     'seo-app': 'SEO Agents App',
     'codex-review': 'Codex Review',
     'claude-cli': 'Claude CLI',
