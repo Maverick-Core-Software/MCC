@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadBrainIndex, scoreMemories } from '../lib/memory.mjs';
+import { loadBrainIndex, scoreMemories, loadMemoryIndex } from '../lib/memory.mjs';
 
 function makeFixtureVault() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-test-'));
@@ -73,8 +73,7 @@ test('scoreMemories returns matches from both sources', () => {
   assert.ok(!results.some((m) => m.id === 'unrelated'));
 });
 
-test('loadMemoryIndex merges sources and counts them', async () => {
-  const { loadMemoryIndex } = await import('../lib/memory.mjs');
+test('loadMemoryIndex merges sources and counts them', () => {
   const index = loadMemoryIndex();
   assert.ok(['online', 'missing'].includes(index.state));
   assert.equal(index.count, index.memories.length);
