@@ -377,7 +377,10 @@ export function OrchestratorPage({ modelStatus, chatSession }) {
 
       <Panel title="MEMORY CONTEXT" className="memoryPanel">
         <div className="memorySummary">
-          <strong>{memoryContext.count ?? memoryContext.memories?.length ?? 0} MEMORIES</strong>
+          <strong>
+            {memoryContext.count ?? memoryContext.memories?.length ?? 0} MEMORIES
+            {memoryContext.sourceCounts ? ` · ${memoryContext.sourceCounts.claude || 0} CLAUDE / ${memoryContext.sourceCounts.brain || 0} BRAIN` : ''}
+          </strong>
           <span>{memoryContext.source === 'seo-app' ? 'SEO APP' : (memoryContext.state || 'UNKNOWN').toUpperCase()}</span>
         </div>
         <div className="memoryTypes">
@@ -389,7 +392,7 @@ export function OrchestratorPage({ modelStatus, chatSession }) {
           {(memoryContext.results || memoryContext.memories || []).slice(0, 5).map((memory) => (
             <div className="memoryMatch" key={memory.id}>
               <strong>{memory.id}</strong>
-              <span>{memory.type}</span>
+              <span>{memory.type}{memory.source ? ` · ${memory.source}` : ''}</span>
               <p>{memory.description}</p>
             </div>
           ))}
