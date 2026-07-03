@@ -20,6 +20,7 @@ import {
 } from './routes/orchestrator.mjs';
 import { handleChat, handleBuildChat } from './lib/chat.mjs';
 import { applyStagedRun, handleListDirs } from './routes/build.mjs';
+import { handlePhotoUpload } from './routes/photos.mjs';
 
 // __dirname kept for code not yet modularized; equals config.rootDir.
 const __dirname = rootDir;
@@ -236,6 +237,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/extract-file' && req.method === 'POST') {
     await handleExtractFile(req, res);
+    return;
+  }
+  if (url.pathname === '/api/photos/upload' && req.method === 'PUT') {
+    await handlePhotoUpload(req, res);
     return;
   }
   if (url.pathname === '/api/list-dirs' && req.method === 'GET') {

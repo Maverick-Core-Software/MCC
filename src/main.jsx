@@ -13,6 +13,7 @@ import {
 } from './pages/SystemPages.jsx';
 import { OrchestratorPage, EstimateConfirmBar } from './pages/OrchestratorPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
+import { EcosystemMapPage } from './pages/EcosystemMapPage.jsx';
 import SEOApprovalPage from './SEOApprovalPage.jsx';
 import { isDocumentResponse, MavMarkdown } from './mavUtils.js';
 import './styles.css';
@@ -239,6 +240,8 @@ function App() {
           <NetworkMapPage metrics={metrics} />
         ) : view === 'seo' ? (
           <SEOApprovalPage />
+        ) : view === 'ecomap' ? (
+          <EcosystemMapPage />
         ) : (
           <OrchestratorPage
             modelStatus={modelStatus}
