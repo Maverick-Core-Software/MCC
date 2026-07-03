@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, dismissSeoAction, querySeoWeekPosts, querySeoTaskLog, generateFacebookSchedule, api } from './lib/api.js';
+import { postHealth } from './lib/seoRules.js';
 
 const TYPE_LABEL = { seo_run: 'SEO RUN', website_task: 'WEBSITE TASK', social_post: 'SOCIAL POST' };
 const STATE_COLOR = { pending_approval: '#f59e0b', needs_approval: '#f59e0b', approved: '#10b981', executing: '#6366f1', complete: '#10b981', needs_verification: '#ef4444', error: '#ef4444', 'not-configured': '#6b7280' };
@@ -117,6 +118,10 @@ function WeekPostsSection({ weekPosts }) {
           {posts.map(post => {
             const isToday = post.post_date === today;
             const isPast = post.post_date < today;
+            // Truthful per-post health. Red wins over the date/status colouring;
+            // green only flips on for verified 'posted' rows. Neutral falls through
+            // to the existing date/status logic below.
+            const health = postHealth(post);
             // For scheduled GBP posts: show urgency based on date
             let statusColor = POST_STATUS_COLOR[post.status] || (isPast ? '#ef4444' : '#6b7280');
             let statusLabel = POST_STATUS_LABEL[post.status] || (isPast ? 'MISSED?' : 'SCHEDULED');
@@ -124,13 +129,18 @@ function WeekPostsSection({ weekPosts }) {
               if (isToday) { statusColor = '#f59e0b'; statusLabel = 'POST TODAY'; }
               else if (isPast) { statusColor = '#ef4444'; statusLabel = 'OVERDUE'; }
             }
+            if (health.state === 'red') { statusColor = '#ef4444'; statusLabel = 'CHECK'; }
             const dateObj = new Date(post.post_date + 'T12:00:00');
             const dayLabel = DAYS[dateObj.getDay() === 0 ? 6 : dateObj.getDay() - 1];
+            const rowBorder = health.state === 'red'
+              ? '1px solid #ef444466'
+              : isToday ? '1px solid #6366f144' : '1px solid #2a2f45';
+            const rowBackground = health.state === 'red' ? '#1e1518' : isToday ? '#1e2235' : '#161922';
 
             return (
               <div key={post.id} style={{
-                background: isToday ? '#1e2235' : '#161922',
-                border: `1px solid ${isToday ? '#6366f144' : '#2a2f45'}`,
+                background: rowBackground,
+                border: rowBorder,
                 borderRadius: 7, padding: '10px 14px',
                 display: 'flex', alignItems: 'center', gap: 12,
               }}>
@@ -157,11 +167,25 @@ function WeekPostsSection({ weekPosts }) {
 
                 {/* Status */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-                  <span style={{
-                    background: statusColor + '22', color: statusColor,
-                    border: `1px solid ${statusColor}44`, borderRadius: 4,
-                    padding: '2px 7px', fontSize: 10, fontWeight: 700, letterSpacing: 1,
-                  }}>{statusLabel}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {health.state === 'green' && (
+                      <span title="Verified — full media published with a real post id" style={{
+                        background: '#10b98122', color: '#10b981', border: '1px solid #10b98144',
+                        borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700,
+                      }}>✓</span>
+                    )}
+                    {health.state === 'red' && (
+                      <span title={health.reason} style={{
+                        background: '#ef444422', color: '#ef4444', border: '1px solid #ef444444',
+                        borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+                      }}>⚠ {health.reason}</span>
+                    )}
+                    <span style={{
+                      background: statusColor + '22', color: statusColor,
+                      border: `1px solid ${statusColor}44`, borderRadius: 4,
+                      padding: '2px 7px', fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                    }}>{statusLabel}</span>
+                  </div>
                   {post.posted_at && (
                     <span style={{ color: '#6b7280', fontSize: 10 }}>
                       {new Date(post.posted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
