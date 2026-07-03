@@ -72,3 +72,13 @@ test('scoreMemories returns matches from both sources', () => {
   assert.ok(sources.has('claude') && sources.has('brain'));
   assert.ok(!results.some((m) => m.id === 'unrelated'));
 });
+
+test('loadMemoryIndex merges sources and counts them', async () => {
+  const { loadMemoryIndex } = await import('../lib/memory.mjs');
+  const index = loadMemoryIndex();
+  assert.ok(['online', 'missing'].includes(index.state));
+  assert.equal(index.count, index.memories.length);
+  assert.ok(index.memories.every((m) => m.source === 'claude' || m.source === 'brain'));
+  const summed = Object.values(index.sourceCounts || {}).reduce((a, b) => a + b, 0);
+  assert.equal(summed, index.count);
+});
