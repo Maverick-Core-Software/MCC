@@ -62,9 +62,9 @@ function FacebookPromptModal({ isOpen, prompt, onApprove, onCancel, loading }) {
   );
 }
 
-function WeekPostsSection({ weekPosts }) {
+function WeekPostsSection({ weekPosts, promoted }) {
   const [tab, setTab] = useState('facebook');
-  if (!weekPosts) return null;
+  if (!weekPosts || (weekPosts.facebook?.length === 0 && weekPosts.gbp?.length === 0)) return null;
 
   const posts = tab === 'facebook' ? weekPosts.facebook : weekPosts.gbp;
   const today = new Date().toISOString().slice(0, 10);
@@ -76,10 +76,14 @@ function WeekPostsSection({ weekPosts }) {
   const gbpScheduled = weekPosts.gbp?.filter(p => p.status === 'scheduled').length || 0;
 
   return (
-    <div style={{ marginTop: 32 }}>
-      <div style={{ borderTop: '1px solid #2a2f45', paddingTop: 24, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ color: '#94a3b8', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
-          This Week's Posts
+    <div style={{ marginTop: promoted ? 0 : 32, marginBottom: promoted ? 24 : 0 }}>
+      <div style={{
+        borderTop: promoted ? 'none' : '1px solid #2a2f45',
+        paddingTop: promoted ? 0 : 24,
+        marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ color: promoted ? '#f1f5f9' : '#94a3b8', fontSize: promoted ? 14 : 11, fontWeight: 700, letterSpacing: promoted ? 0.5 : 1, textTransform: 'uppercase' }}>
+          {promoted ? "This Week's Posts" : "This Week's Posts"}
         </div>
         <div style={{ color: '#6b7280', fontSize: 11 }}>
           {weekPosts.week_start} – {weekPosts.week_end}
@@ -219,6 +223,11 @@ function ActionCard({ action, onApprove, onRun, busy }) {
   const [running, setRunning] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [result, setResult] = useState(null);
+  // Optimistic local approve flag. The /seo/actions payload bucket-maps
+  // 'approved' → 'pending' (correct for mav-bridge polling), so without this
+  // flag the APPROVE button would keep showing until the 30s poll catches the
+  // status flip to 'executing'. Set immediately on successful approve.
+  const [approved, setApproved] = useState(false);
 
   const handleDismiss = async () => {
     setDismissing(true);
@@ -239,6 +248,7 @@ function ActionCard({ action, onApprove, onRun, busy }) {
     setResult(null);
     try {
       const res = await approveSeoAction(action.id, action.label, action.type);
+      setApproved(true);
       setResult({ ok: true, msg: res.message || 'Approved — bridge will execute shortly.' });
       onApprove?.();
     } catch (err) {
@@ -263,8 +273,10 @@ function ActionCard({ action, onApprove, onRun, busy }) {
   };
 
   const isPending = action.status === 'pending';
-  const canApprove = action.status === 'pending' && action.approval_required && !action.approval;
-  const isApproved = action.status === 'pending' && Boolean(action.approval);
+  // action.approval is the server-side flag (set once status flips past
+  // pending_approval). `approved` is the local optimistic flag (set on click).
+  const isApproved = approved || (action.status === 'pending' && Boolean(action.approval));
+  const canApprove = action.status === 'pending' && action.approval_required && !isApproved;
   const badge = STATUS_BADGE[action.status] || STATUS_BADGE.pending;
   const media = action.media_status && action.media_status !== 'n/a' ? MEDIA_ICON[action.media_status] : null;
 
@@ -327,6 +339,51 @@ function ActionCard({ action, onApprove, onRun, busy }) {
 
 const EVENT_LABEL = { approved: 'APPROVED', run: 'RUN NOW' };
 const EVENT_COLOR = { approved: '#10b981', run: '#6366f1' };
+
+// Collapsible wrapper for website_tasks. mav-bridge returns up to 20 of them
+// bucketed as 'pending' even after approval, which made the page render a wall
+// of near-identical cards. Group them into one summary header that expands on
+// click — individual tasks still get full ActionCard detail when expanded.
+function WebsiteTasksCard({ tasks, onApprove, onRun }) {
+  const [open, setOpen] = useState(false);
+  const pending = tasks.filter(t => t.status === 'pending' && t.approval_required).length;
+  const failed = tasks.filter(t => t.status === 'failed').length;
+  const inProcess = tasks.filter(t => t.status === 'in_process').length;
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', textAlign: 'left', cursor: 'pointer',
+          background: '#1a1d26', border: `1px solid ${pending ? '#f59e0b33' : '#2a2f45'}`,
+          borderRadius: 8, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10,
+        }}
+      >
+        <StatusBadge label="WEBSITE TASKS" color="#6b7280" />
+        <span style={{ color: '#f1f5f9', fontWeight: 600, flex: 1, fontSize: 14 }}>
+          {tasks.length} website task{tasks.length === 1 ? '' : 's'}
+        </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {pending > 0 && <StatusBadge label={`${pending} AWAIT`} color="#f59e0b" />}
+          {inProcess > 0 && <StatusBadge label={`${inProcess} RUNNING`} color="#6366f1" />}
+          {failed > 0 && <StatusBadge label={`${failed} FAILED`} color="#ef4444" />}
+          {pending === 0 && inProcess === 0 && failed === 0 && (
+            <StatusBadge label="QUEUED" color="#6b7280" />
+          )}
+        </div>
+        <span style={{ color: '#6b7280', fontSize: 16 }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 6, paddingLeft: 12, borderLeft: '1px solid #2a2f45', marginLeft: 8 }}>
+          {tasks.map(action => (
+            <ActionCard key={action.id} action={action} onApprove={onApprove} onRun={onRun} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TaskActivity({ tasks }) {
   if (!tasks || tasks.length === 0) return (
@@ -452,9 +509,35 @@ export default function SEOApprovalPage() {
   }, [load]);
 
   const stateColor = STATE_COLOR[workflow?.state] || '#6b7280';
-  const pendingActions = actions.filter(a => a.status === 'pending');
-  const otherActions = actions.filter(a => a.status !== 'pending' && a.status !== 'completed');
+
+  // Once the run is past the approval gate, the weekly posts grid becomes the
+  // primary view. run_status comes from /seo/posts/week (the latest run's
+  // live status); workflow.state is the broader pipeline state.
+  const runStatus = weekPosts?.run_status;
+  const isApproved = ['approved', 'executing', 'awaiting_prompt', 'done', 'posted']
+    .includes(runStatus) || ['approved', 'executing', 'awaiting_prompt'].includes(workflow?.state);
+
+  // Card filtering — reduce noise once approved:
+  //  - seo_run cards: always show (already filtered to active/recent by mav-bridge)
+  //  - weekly_post cards: hidden entirely once approved (they're in the grid above)
+  //  - website_task cards: grouped into one collapsible card
+  const seoRunActions = actions.filter(a => a.type === 'seo_run');
+  const pendingRunCards = seoRunActions.filter(a => a.status === 'pending');
+  const otherRunCards = seoRunActions.filter(a => a.status !== 'pending' && a.status !== 'completed');
+
+  const weeklyPostCards = actions.filter(a =>
+    a.type === 'weekly_post' && (!isApproved || a.status === 'failed')
+  );
+  const pendingWeeklyCards = weeklyPostCards.filter(a => a.status === 'pending');
+  const otherWeeklyCards = weeklyPostCards.filter(a => a.status !== 'pending' && a.status !== 'completed');
+
+  const websiteTasks = actions.filter(a => a.type === 'website_task');
   const completedActions = actions.filter(a => a.status === 'completed');
+
+  // Pending count for the summary bar reflects what actually needs the user's
+  // attention: seo_run + weekly_post cards that are still actionable. Website
+  // tasks are collapsed, so don't surface their count at the top level.
+  const pendingCount = pendingRunCards.length + pendingWeeklyCards.length;
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 920, margin: '0 auto' }}>
@@ -543,7 +626,7 @@ export default function SEOApprovalPage() {
           {/* Summary bar */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
             {[
-              { label: 'Pending Approval', value: pendingActions.length, color: '#f59e0b' },
+              { label: 'Pending Approval', value: pendingCount, color: '#f59e0b' },
               { label: 'Reports Generated', value: workflow.activeWorkflow?.reportsGenerated ?? 0, color: '#10b981' },
               { label: 'Alerts', value: alerts.length + (workflow.faults || []).length, color: '#ef4444' },
             ].map(s => (
@@ -608,31 +691,59 @@ export default function SEOApprovalPage() {
             </div>
           )}
 
-          {/* Pending actions */}
-          {pendingActions.length > 0 && (
+          {/* Weekly posts grid — promoted to top once the run is past the
+              approval gate. Before approval the cards below are the primary view;
+              after, the clean Mon/Tue/Wed... grid is what users came to see. */}
+          {isApproved && (
+            <WeekPostsSection weekPosts={weekPosts} promoted />
+          )}
+
+          {/* Pending seo_run + weekly_post cards (weekly_post cards are hidden
+              entirely once approved — they're in the grid above). */}
+          {(pendingRunCards.length > 0 || pendingWeeklyCards.length > 0) && (
             <>
               <div style={{ color: '#f59e0b', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
-                Awaiting Approval ({pendingActions.length})
+                Awaiting Approval ({pendingRunCards.length + pendingWeeklyCards.length})
               </div>
-              {pendingActions.map(action => (
+              {pendingRunCards.map(action => (
+                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
+              ))}
+              {pendingWeeklyCards.map(action => (
                 <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
               ))}
             </>
           )}
 
-          {/* Other actions */}
-          {otherActions.length > 0 && (
+          {/* Website tasks — always grouped into one collapsible card.
+              mav-bridge returns up to 20 of these bucketed as 'pending' even
+              after approval, which made the page a wall of identical cards. */}
+          {websiteTasks.length > 0 && (
             <>
               <div style={{ color: '#6b7280', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '20px 0 10px' }}>
-                Other Actions ({otherActions.length})
+                Website Tasks
               </div>
-              {otherActions.map(action => (
+              <WebsiteTasksCard tasks={websiteTasks} onApprove={load} onRun={load} />
+            </>
+          )}
+
+          {/* Other (non-pending) run/weekly cards that still warrant visibility */}
+          {(otherRunCards.length > 0 || otherWeeklyCards.length > 0) && (
+            <>
+              <div style={{ color: '#6b7280', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '20px 0 10px' }}>
+                Other Actions ({otherRunCards.length + otherWeeklyCards.length})
+              </div>
+              {otherRunCards.map(action => (
+                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
+              ))}
+              {otherWeeklyCards.map(action => (
                 <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
               ))}
             </>
           )}
 
-          {pendingActions.length === 0 && otherActions.length === 0 && completedActions.length === 0 && (
+          {pendingRunCards.length === 0 && pendingWeeklyCards.length === 0
+            && otherRunCards.length === 0 && otherWeeklyCards.length === 0
+            && websiteTasks.length === 0 && completedActions.length === 0 && (
             <div style={{ color: '#6b7280', textAlign: 'center', padding: 60 }}>
               No pending actions. Pipeline is idle or already approved.
             </div>
@@ -652,7 +763,11 @@ export default function SEOApprovalPage() {
             </div>
           )}
 
-          <WeekPostsSection weekPosts={weekPosts} />
+          {/* Weekly posts grid at the BOTTOM when not yet approved — kept
+              visible so the user can preview the week before approving. */}
+          {!isApproved && (
+            <WeekPostsSection weekPosts={weekPosts} />
+          )}
           <TaskActivity tasks={taskLog} />
         </>
       )}
