@@ -10,15 +10,16 @@ function makeFixtureVault() {
   fs.mkdirSync(path.join(root, 'knowledge'));
   fs.mkdirSync(path.join(root, '.obsidian'));
   fs.writeFileSync(path.join(root, 'knowledge', 'glossary.md'),
-    '# Glossary\n\nTerms and acronyms for the Maverick stack.\n\nSee [[preferences]].\n');
+    '# Glossary\n\nTerms and acronyms for the Maverick stack.\n\nSee [[preferences]].\n\nHomelab host lives at 10.0.0.5.\n');
   fs.writeFileSync(path.join(root, 'index.md'), '---\ndescription: Master index\n---\n\n# Brain\n\nCatalog.\n');
   fs.writeFileSync(path.join(root, '.obsidian', 'ignored.md'), '# should be skipped\n');
   fs.writeFileSync(path.join(root, 'knowledge', 'big.md'), '# Big\n\n' + 'x'.repeat(5000) + '\n');
   return root;
 }
 
-test('loadBrainIndex maps vault notes to the memory shape', () => {
+test('loadBrainIndex maps vault notes to the memory shape', (t) => {
   const root = makeFixtureVault();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const index = loadBrainIndex(root);
   assert.equal(index.state, 'online');
 
@@ -28,6 +29,7 @@ test('loadBrainIndex maps vault notes to the memory shape', () => {
   assert.equal(glossary.source, 'brain');
   assert.equal(glossary.description, 'Terms and acronyms for the Maverick stack.');
   assert.deepEqual(glossary.related, ['preferences']);
+  assert.ok(glossary.body.includes('[redacted ip]'), 'IPs in note bodies are redacted');
 
   const indexNote = index.memories.find((m) => m.id === 'index');
   assert.equal(indexNote.type, 'root');
@@ -44,6 +46,17 @@ test('loadBrainIndex maps vault notes to the memory shape', () => {
 test('loadBrainIndex handles a missing vault', () => {
   const index = loadBrainIndex('C:\\definitely\\not\\a\\vault');
   assert.equal(index.state, 'missing');
+  assert.equal(index.memories.length, 0);
+  assert.equal(index.warnings.length, 1);
+});
+
+test('loadBrainIndex returns error state when the vault path is a file', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-test-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const filePath = path.join(dir, 'not-a-vault.md');
+  fs.writeFileSync(filePath, '# just a file\n');
+  const index = loadBrainIndex(filePath);
+  assert.equal(index.state, 'error');
   assert.equal(index.memories.length, 0);
   assert.equal(index.warnings.length, 1);
 });
