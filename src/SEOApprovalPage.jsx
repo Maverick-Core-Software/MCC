@@ -67,7 +67,12 @@ function WeekPostsSection({ weekPosts, promoted }) {
   if (!weekPosts || (weekPosts.facebook?.length === 0 && weekPosts.gbp?.length === 0)) return null;
 
   const posts = tab === 'facebook' ? weekPosts.facebook : weekPosts.gbp;
-  const today = new Date().toISOString().slice(0, 10);
+  // Use Central time for today check — UTC rolls over at 7pm CT which falsely
+  // shows tomorrow's posts as "POST TODAY".
+  const todayParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const today = `${todayParts.find(p => p.type === 'year').value}-${todayParts.find(p => p.type === 'month').value}-${todayParts.find(p => p.type === 'day').value}`;
 
   const fbCount = weekPosts.facebook?.length || 0;
   const gbpCount = weekPosts.gbp?.length || 0;
