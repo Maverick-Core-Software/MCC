@@ -23,6 +23,10 @@ module.exports = {
         OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || 'http://192.168.1.12:4000',
         NVIDIA_NIM_API_KEY: process.env.NVIDIA_NIM_API_KEY || '',
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || '',
+        ZAI_API_KEY: process.env.ZAI_API_KEY || '',
+        ZAI_BASE_URL: process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4',
+        ZAI_MODEL: process.env.ZAI_MODEL || 'glm-5.2',
+        ZAI_VISION_MODEL: process.env.ZAI_VISION_MODEL || 'glm-5v-turbo',
         GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
         PROMETHEUS_URL: process.env.PROMETHEUS_URL || 'http://192.168.1.12:9090',
         MAV_RAG_URL: process.env.MAV_RAG_URL || 'http://192.168.1.12:8181',
@@ -87,41 +91,12 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       windowsHide: true,
     },
-    {
-      name: 'qwen3-llama',
-      // llama-server.exe — Qwen3-14B Q4_K_L, 100% GPU, OpenAI-compatible at :8080
-      // Reasoning controlled per-request via /think or /no_think message prefix.
-      // min_uptime: model takes ~20-30s to load; long restart_delay avoids VRAM
-      // fragmentation if CUDA fails to free on a fast crash-restart cycle.
-      script: 'C:\\Workspace\\Infrastructure\\llama-cpp-server\\llama-server.exe',
-      interpreter: 'none',
-      args: [
-        '--model',        'C:\\Workspace\\Infrastructure\\llama-cpp-server\\models\\Qwen_Qwen3-14B-Q4_K_L.gguf',
-        '--host',         '0.0.0.0',
-        '--port',         '8080',
-        '--alias',        'qwen3-14b',
-        '--gpu-layers',   '99',
-        '--ctx-size',     '65536',
-        '--parallel',     '2',
-        '--cache-type-k', 'q4_0',
-        '--cache-type-v', 'q4_0',
-        '--flash-attn',   'on',
-        '--jinja',
-        '--batch-size',   '4096',
-        '--ubatch-size',  '1024',
-        '--cont-batching',
-        '--metrics',
-      ].join(' '),
-      cwd: 'C:\\Workspace\\Infrastructure\\llama-cpp-server',
-      watch: false,
-      autorestart: true,
-      max_restarts: 5,
-      min_uptime: '60s',
-      restart_delay: 20000,
-      kill_timeout: 10000,
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      windowsHide: false,
-    },
+    // qwen3-llama and llama-guardian are NOT defined here. Their canonical
+    // definitions live in C:\Workspace\Infrastructure\llama-cpp-server\
+    // ecosystem.config.cjs (llama on :8081, guardian proxying :8080). A stale
+    // qwen3-llama entry in this file (old 14B model, --port 8080) was
+    // re-registered by `pm2 start` on 2026-07-09 and crash-looped against the
+    // guardian's port. Do not re-add it here.
     {
       name: 'mcc-dashboard-agent',
       script: 'agent.py',
