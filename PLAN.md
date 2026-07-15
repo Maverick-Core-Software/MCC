@@ -30,7 +30,7 @@
 **Stack / decisions:** Python; repo is `C:\Workspace\Infrastructure\agent-os` (no git remote — local commits only). OpenCode is removed entirely: not a provider, not a fallback. Direct vendor keys are the fallback tier (already implemented in the uncommitted work).
 
 **Tasks:**
-1. In `C:\Workspace\Infrastructure\agent-os`, commit ALL currently modified and untracked files as-is (this is prior work being landed, not yours to change). Untracked to include: `scripts/smoke_venice.py`, `memory/SESSION.md`, `docs/Head-Orchestrator/`, `src/kernel/static/head-orchestrator-diagram.html`. Commit message below (first commit).
+1. In `C:\Workspace\Infrastructure\agent-os`, commit ALL currently modified and untracked files as-is (this is prior work being landed, not yours to change — it now also includes the completed Head Orchestrator session's files; land them in the same commit). Untracked to include: `scripts/smoke_venice.py`, `memory/SESSION.md`, `docs/Head-Orchestrator/`, `src/kernel/static/head-orchestrator-diagram.html`. Commit message below (first commit).
 2. Remove residual OpenCode references: grep the repo for `opencode` (case-insensitive) in `src/` and `config/`. In `src/kernel/model_bridge.py` and `src/kernel/providers.py` there is one reference each — delete the dead code path or comment referring to OpenCode routing (do not leave an `opencode/` model-ref parseable). In `config/model-routing.yaml` the single mention is an explanatory comment — leave comments alone.
 3. Update tests that assert OpenCode behavior: `tests/test_cost_tracking.py`, `tests/test_cli.py`, `tests/test_orchestrator.py`, `tests/test_providers.py`, `tests/test_model_bridge.py`, `tests/test_pricing.py` contain `opencode` references. Convert each to the venice/direct equivalent the current router actually supports (`parse_model_ref` has no `opencode/` — tests must not expect it). Run the full suite until green.
 4. Run the live smoke: `python scripts/smoke_venice.py` from the repo root (reads `.env` `VENICE_API_KEY`, default model `zai-org-glm-5-2`). It must print a successful chat completion.
@@ -40,7 +40,7 @@
 - Model refs: `venice/<model-id>`, `direct/<vendor>/<model>`, `local/<model>` — no `opencode/`
 
 **Verification:**
-- Run: `python -m pytest -q` - expected: all tests pass, 0 failures
+- Run: `python -m pytest -q` - expected: all tests pass, 0 failures. KNOWN ISSUE: the full suite has a pre-existing timeout problem (reported by the prior Head Orchestrator session — not yours to fix). If the full run hangs or times out, instead run only the six test files listed in task 3 plus `tests/test_providers.py` individually with a 300s cap each and report which passed; do NOT attempt to fix the timeout.
 - Run: `python scripts/smoke_venice.py` - expected: non-empty completion text, exit 0
 - Run: `git -C C:\Workspace\Infrastructure\agent-os status --short` - expected: clean
 
@@ -147,6 +147,43 @@
 
 Research-only; zero code or config edits. SEO-Agents currently generates videos with Google Veo 3 (`GEMINI_VEO_MODEL=veo-3.0-generate-001`); quality is good but Carter sees visible "misses". Deliverable: a findings report comparing the current best video-generation models (July 2026) — candidates to cover at minimum: newer Veo releases, OpenAI Sora, Kling, Runway Gen-4+, MiniMax/Hailuo, Wan, and whatever Venice offers for video (it has a video quote API — pricing/quality/API maturity). Compare on: output quality/artifact rate for short marketing/SEO clips, API access + pricing, generation speed, prompt adherence. End state: report to Carter; he decides whether to test alternatives or keep Veo. No edits to SEO-Agents in this phase regardless of findings.
 
+## Session 4b - grizzly-hcp: wire and fix the retry fallback (corrective)
+
+**Goal:** the one-retry Venice→fallback path actually executes: `withRetry` is applied at the call site and catches async failures.
+**Independent:** yes
+**Stack / decisions:** TypeScript, repo `C:\Workspace\Active\grizzly-hcp`. Session 4 landed commit `78376eb` but left two defects. No new dependencies.
+
+**Tasks:**
+1. In `src/agent/index.ts` (~line 214) the agent is constructed with `model: getModel('REASONING')`. Change it to pass that model through `withRetry` with role `'REASONING'` so the fallback wrapper is actually used. `withRetry` is already imported.
+2. In `src/agent/model-router.ts`, fix `withRetry` (~line 73): `doGenerate`/`doStream` are async — the current `try { return fn(...args) } catch` only catches synchronous throws, so a rejected promise never triggers the fallback. Rework the wrapped function so it resolves the result as a promise and on rejection logs the existing one-line warning and calls the fallback model's same method with identical args (still exactly one retry). Preserve the existing behavior for synchronous throws. Bind `fn` to the original target so `this` is not lost.
+
+**Verification:**
+- Run: `npx tsc --noEmit` - expected: only the pre-existing errors in `src/automations/estimates/from-proposal.ts` and `src/hcp/mine-pricebook-candidates.ts`; nothing new in `src/agent/`.
+- Create a throwaway `scripts/smoke-retry.ts`: call `generateText` with `withRetry(getModel('CHEAP'), 'CHEAP')` prompting "Reply with the single word pong" — expected: pong. Then temporarily set `VENICE_BASE_URL=https://invalid.venice.invalid/api/v1` in the process env inside the script (before importing the router) and confirm the call still returns via the z.ai fallback with the warning line printed. Delete the script after (do not commit it).
+
+**Commit:** `fix: apply withRetry at agent call site, make fallback async-aware`
+
+## Session 5b - SEO-Agents-App: make CrewAI reach Venice without litellm (corrective)
+
+**Goal:** both CrewAI tiers reach Venice through crewai's native OpenAI-compatible provider; the smoke passes.
+**Independent:** yes
+**Stack / decisions:** Python, repo `C:\Workspace\Active\SEO-Agents-App`, venv `.venv`. crewai 1.15.1 has NO litellm installed and its model matcher rejects unknown model names like `openai/zai-org-glm-5-2` unless a `provider` kwarg is passed. Verified live: `LLM(model='zai-org-glm-5-2', provider='openai', base_url=<venice>, api_key=<key>).call(...)` returns "pong"; the `openai/`-prefixed form 404s (prefix is passed through to Venice). Do NOT install litellm.
+
+**Tasks:**
+1. In `src/seo_agents/crew.py` `_llm_kwargs(tier)`: when `CREWAI_<TIER>_API_BASE` is set, also set `kwargs["provider"] = os.getenv(f"CREWAI_{tier}_PROVIDER", "openai")`. Update the docstring's example to use a plain model id (no `openai/` prefix) when an API base override is active.
+2. In `.env` (never echo values): change `CREWAI_RESEARCH_MODEL` from `openai/zai-org-glm-5-2` to `zai-org-glm-5-2` and `CREWAI_EXEC_MODEL` from `openai/deepseek-v4-pro` to `deepseek-v4-pro`. Leave every other line, including the REVERT comments, untouched.
+3. In `.env.example`: apply the same two model-value changes so it matches reality.
+
+**Verification:**
+- Run from repo root: `.venv\Scripts\python.exe -c "from src.seo_agents.crew import build_research_llm, build_exec_llm; print(build_research_llm().call('Reply with the single word pong')); print(build_exec_llm().call('Reply with the single word pong'))"` - expected: two non-empty replies.
+- Run: `git status --short` - expected: only `src/seo_agents/crew.py` and `.env.example` newly modified (plus the pre-existing dirty files already present before this session — leave those alone).
+
+**Commit:** `fix: crewai native openai provider for venice tiers (no litellm dependency)`
+
 ## Revisions
 
-(empty)
+**2026-07-15 (orchestrator, during Phase B):**
+- Session 1 amended: the prior-session pile now includes the completed Head Orchestrator work (landed in the same first commit), and the full-pytest verification gained a fallback for the pre-existing suite-timeout issue that session reported.
+- Session 4 verified with defects: `withRetry` exported/imported but never applied, and its catch never fires for async rejections → corrective Session 4b added.
+- Session 5 verified with a blocker: crewai 1.15.1 without litellm rejects unknown `openai/<model>` ids; native-provider path (`provider='openai'` + plain model id) confirmed live against Venice → corrective Session 5b added. Discovery: the pre-Venice exec model was `anthropic/claude-sonnet-4-6` (frontier), not `openai/gpt-4o` as planned — left on Venice per Carter's per-app directive ("swap to open models on venice"), flagged in the final report with a one-line revert path.
+- All mechanical corrections; no scope or design change requiring re-approval.
