@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,12 +7,14 @@ import { execSync } from 'node:child_process';
 import {
   rootDir, distDir, port, deployStartedAt, prometheusUrl, ragUrl,
   types, ALLOWED_ORIGINS, OPENROUTER_MODELS, openRouterUrl, openRouterModel,
+  VENICE_MODELS, veniceBaseUrl, veniceModel,
 } from './lib/config.mjs';
 import { send, sendJson, readJsonBody } from './lib/http.mjs';
 import { seoTaskLog } from './lib/state.mjs';
 import { getMemoryIndex } from './lib/memory.mjs';
 import { callSeoApp } from './lib/models.mjs';
 import { getLlamaStatus } from './lib/llama-status.mjs';
+import { getZaiStatus } from './lib/zai-status.mjs';
 import { handleExtractFile } from './lib/extract.mjs';
 import { getSeoWorkflowStatus, proxySeoActions } from './routes/seo.mjs';
 import {
@@ -21,6 +24,7 @@ import {
 import { handleChat, handleBuildChat } from './lib/chat.mjs';
 import { applyStagedRun, handleListDirs } from './routes/build.mjs';
 import { handlePhotoUpload } from './routes/photos.mjs';
+import { getThumbtackWebhookStatus, handleThumbtackWebhook } from './routes/thumbtack.mjs';
 
 // __dirname kept for code not yet modularized; equals config.rootDir.
 const __dirname = rootDir;
@@ -72,6 +76,14 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/chat' && req.method === 'POST') {
     await handleChat(req, res);
+    return;
+  }
+  if (url.pathname === '/api/webhooks/thumbtack/health' && req.method === 'GET') {
+    getThumbtackWebhookStatus(req, res);
+    return;
+  }
+  if (url.pathname === '/api/webhooks/thumbtack' && req.method === 'POST') {
+    await handleThumbtackWebhook(req, res);
     return;
   }
   if (url.pathname === '/api/rag' && req.method === 'POST') {
@@ -135,8 +147,12 @@ const server = http.createServer(async (req, res) => {
     await getLlamaStatus(res);
     return;
   }
+  if (url.pathname === '/api/llm/zai-status') {
+    await getZaiStatus(res);
+    return;
+  }
   if (url.pathname === '/api/llm/models') {
-    sendJson(res, 200, { models: OPENROUTER_MODELS, defaultModel: openRouterModel });
+    sendJson(res, 200, { models: VENICE_MODELS, defaultModel: veniceModel });
     return;
   }
 
@@ -372,4 +388,5 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`mav-console dashboard listening on http://0.0.0.0:${port}`);
   console.log(`Prometheus: ${prometheusUrl}`);
   console.log(`OpenRouter: ${openRouterUrl} (model: ${openRouterModel})`);
+  console.log(`Venice: ${veniceBaseUrl} (model: ${veniceModel})`);
 });
