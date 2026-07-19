@@ -40,5 +40,5 @@ Current state as of 2026-07-19. What is true NOW.
 2. **HCP-MCP migration** — second instance on LXC `192.168.1.14:7332`, in ~48h observation through ~2026-07-21. Local pm2 app stays authoritative until full migration. User `.env` pointing at the LXC (vs grizzly `.env` at 127.0.0.1) is intentional observation traffic.
 3. **User `.env` has `MCC_URL=localhost:3011`** — 3000 everywhere else. Unresolved discrepancy.
 4. **Unexplained elevated pm2 actor** ran 2026-07-19 03:42–03:46. Source unknown.
-5. **Per-app clean restarts pending** — delete+start from owning ecosystem file to purge stale frozen dump envs. Each needs Carter's individual consent.
+5. **Per-app clean restarts: RESOLVED 2026-07-19** — audit of running envs vs ecosystem files found only one divergence: maverick-dashboard's wrong cwd, fixed via consented delete+start+save (cwd now `...\workflows\dashboard`, persisted in dump). housecall-pro-mcp, homelab-agent-sensors, fb-comment-agent verified already correct.
 6. **`PM2_JS` fragility** — points into carte's npm profile; breaks if pm2 is moved/reinstalled.
