@@ -34,3 +34,16 @@ fine. The secret-bearing `dump.pm2` was also world-readable via `BUILTIN\Users`.
 **Unresolved:** non-elevated pm2 still fails — the live daemon's named pipes
 predate the ACL fix and pipe security descriptors are fixed at creation. Needs a
 consented service restart (deferred). See `HANDOFF.md` open items.
+
+## 2026-07-19 (later) — PM2 service restart, EPERM verdict: permanent
+
+With Carter's consent: killed orphan 50572, ran elevated `pm2 kill`, let the
+supervisor resurrect all 16 apps from the fresh dump (new daemon, new pipes).
+First `Restart-Service PM2` only bounced the supervisor — the pm2 daemon
+detaches from NSSM's process, so `pm2 kill` is the real restart.
+
+Result: all apps back online, `sync-estimates-weekly` correctly restored as
+stopped. But non-elevated `pm2 jlist` STILL fails — new pipes inherit the
+Administrators-only default DACL from the daemon's unfiltered admin token.
+The EPERM is structural, not stale state. The file-read workaround and the
+SOUL.md "never run pm2 from user space" rule are now permanent.

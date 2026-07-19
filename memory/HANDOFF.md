@@ -31,8 +31,8 @@ Current state as of 2026-07-19. What is true NOW.
 
 ## Known broken / pending
 
-- **Non-elevated `pm2` still fails** with `connect EPERM \\.\pipe\interactor.sock`. The live daemon's named pipes predate the ACL fix and pipe security descriptors are fixed at creation. Fix requires a consented service restart — deliberately deferred.
-- Orphan daemon PID 50572 (stranded 2026-07-19 06:59 by the failed acceptance test) reported, not killed. Two earlier orphans (04:26) were killed with consent.
+- **Non-elevated `pm2` fails PERMANENTLY** with `connect EPERM \\.\pipe\...`. Confirmed 2026-07-19 after a consented full restart (elevated `pm2 kill` → supervisor resurrect, new daemon, new pipes): the daemon's unfiltered admin token gives its pipes an Administrators-only default DACL, so UAC-filtered shells can never connect. Not stale state — a property of Windows default pipe security for admin accounts. No restart will ever fix it; the file-read workaround (SOUL.md rule) is permanent.
+- Orphan daemon PID 50572 (06:59 acceptance test) killed with consent 2026-07-19. Post-restart retest stranded two more (59252, 25652 at 07:43), pending kill consent.
 
 ## Open items
 
