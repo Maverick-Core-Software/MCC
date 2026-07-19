@@ -11,7 +11,7 @@ try {
 
     $parentIds = @{}
     foreach ($p in Get-CimInstance Win32_Process -ErrorAction SilentlyContinue) {
-        if ($p.ParentProcessId) { $parentIds[$p.ParentProcessId] = $true }
+        if ($p.ParentProcessId) { $parentIds[[int]$p.ParentProcessId] = $true }
     }
 
     $rows = foreach ($p in $procs) {
