@@ -33,6 +33,10 @@ frozen snapshot — it is rewritten only by `pm2 save` and its env blocks go sta
 
 These are registered on next `pm2 start <file>` + `pm2 save`; they are not running.
 
+> **Warning:** `maverickforge` is configured with `PORT: 3012`, which collides
+> with the live `customer-chat-server` (also 3012). Resolve the port before ever
+> starting it.
+
 ## Known hazards
 
 - **Orphan duplicate dashboard on port 8793** — not pm2-managed, dies at reboot.
