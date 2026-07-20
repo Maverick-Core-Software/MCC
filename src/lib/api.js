@@ -193,6 +193,28 @@ export async function runSeoAction(actionId, label = '', type = '', live = false
   return payload;
 }
 
+export async function retrySeoAction(actionId, label = '', type = '', scope = 'action') {
+  const response = await fetch(api('/api/workflows/seo/actions/retry'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ actionId, label, type, scope })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `SEO retry failed: ${response.status}`);
+  return payload;
+}
+
+export async function clearSeoFault(actionId, label = '', type = '', mode = 'ack', faultKey = '') {
+  const response = await fetch(api('/api/workflows/seo/actions/clear-fault'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ actionId, label, type, mode, faultKey })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `SEO clear-fault failed: ${response.status}`);
+  return payload;
+}
+
 export async function generateFacebookSchedule(days = 7, startDate = '') {
   const response = await fetch(api('/api/workflows/seo/facebook/new-schedule'), {
     method: 'POST',

@@ -189,6 +189,14 @@ const server = http.createServer(async (req, res) => {
     await proxySeoActions(req, res, 'dismiss');
     return;
   }
+  if (url.pathname === '/api/workflows/seo/actions/retry' && req.method === 'POST') {
+    await proxySeoActions(req, res, 'retry');
+    return;
+  }
+  if (url.pathname === '/api/workflows/seo/actions/clear-fault' && req.method === 'POST') {
+    await proxySeoActions(req, res, 'clear-fault');
+    return;
+  }
   if (url.pathname === '/api/workflows/seo/posts/week') {
     try {
       sendJson(res, 200, await callSeoApp('/seo/posts/week', { timeoutMs: 10_000 }));

@@ -1,6 +1,6 @@
 // SEO pipeline proxies — MCC dashboard to SEO Agents App /seo endpoints.
-// getSeoWorkflowStatus feeds the SEO panel; proxySeoActions forwards list/approve/run and
-// records each approve/run in the task event log.
+// getSeoWorkflowStatus feeds the SEO panel; proxySeoActions forwards list/approve/run/retry
+// and records each mutating action in the task event log.
 import { sendJson, readJsonBody } from '../lib/http.mjs';
 import { seoAppUrl } from '../lib/config.mjs';
 import { logSeoEvent } from '../lib/state.mjs';
@@ -48,10 +48,10 @@ export async function proxySeoActions(req, res, action) {
     }
     const payload = await readJsonBody(req);
     const { actionId, label, type } = payload;
+
     if (action === 'approve') {
-      let result;
       try {
-        result = await callSeoApp('/seo/actions/approve', { method: 'POST', body: payload, timeoutMs: 180_000 });
+        const result = await callSeoApp('/seo/actions/approve', { method: 'POST', body: payload, timeoutMs: 180_000 });
         logSeoEvent(actionId, label, type, 'approved', true, result.message || 'Approved');
         sendJson(res, 200, result);
       } catch (err) {
@@ -60,28 +60,56 @@ export async function proxySeoActions(req, res, action) {
       }
       return;
     }
+
     if (action === 'run') {
-      let result;
       try {
-        result = await callSeoApp('/seo/actions/run', { method: 'POST', body: payload, timeoutMs: 600_000 });
+        const result = await callSeoApp('/seo/actions/run', { method: 'POST', body: payload, timeoutMs: 600_000 });
         logSeoEvent(actionId, label, type, 'run', true, result.message || 'Triggered');
         sendJson(res, 200, result);
       } catch (err) {
         logSeoEvent(actionId, label, type, 'run', false, err.message);
         throw err;
       }
+      return;
     }
+
     if (action === 'dismiss') {
-      let result;
       try {
-        result = await callSeoApp('/seo/actions/dismiss', { method: 'POST', body: payload, timeoutMs: 30_000 });
+        const result = await callSeoApp('/seo/actions/dismiss', { method: 'POST', body: payload, timeoutMs: 30_000 });
         logSeoEvent(actionId, label, type, 'dismissed', true, result.message || 'Dismissed');
         sendJson(res, 200, result);
       } catch (err) {
         logSeoEvent(actionId, label, type, 'dismissed', false, err.message);
         throw err;
       }
+      return;
     }
+
+    if (action === 'retry') {
+      try {
+        const result = await callSeoApp('/seo/actions/retry', { method: 'POST', body: payload, timeoutMs: 60_000 });
+        logSeoEvent(actionId, label, type, 'retry', true, result.message || 'Retried');
+        sendJson(res, 200, result);
+      } catch (err) {
+        logSeoEvent(actionId, label, type, 'retry', false, err.message);
+        throw err;
+      }
+      return;
+    }
+
+    if (action === 'clear-fault') {
+      try {
+        const result = await callSeoApp('/seo/actions/clear-fault', { method: 'POST', body: payload, timeoutMs: 30_000 });
+        logSeoEvent(actionId, label, type, 'clear-fault', true, result.message || 'Fault cleared');
+        sendJson(res, 200, result);
+      } catch (err) {
+        logSeoEvent(actionId, label, type, 'clear-fault', false, err.message);
+        throw err;
+      }
+      return;
+    }
+
+    sendJson(res, 400, { error: `Unknown SEO action: ${action}` });
   } catch (error) {
     sendJson(res, 500, { error: error.message, source: 'seo-app' });
   }

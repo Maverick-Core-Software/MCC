@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, dismissSeoAction, querySeoWeekPosts, querySeoTaskLog, generateFacebookSchedule, api } from './lib/api.js';
+import { querySeoWorkflow, querySeoActions, approveSeoAction, runSeoAction, dismissSeoAction, retrySeoAction, clearSeoFault, querySeoWeekPosts, querySeoTaskLog, generateFacebookSchedule, api } from './lib/api.js';
 import { postHealth } from './lib/seoRules.js';
 
 const TYPE_LABEL = { seo_run: 'SEO RUN', website_task: 'WEBSITE TASK', social_post: 'SOCIAL POST' };
@@ -14,8 +14,10 @@ const STATUS_BADGE = {
 const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
 const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
 
-const POST_STATUS_COLOR = { posted: '#10b981', done: '#10b981', scheduled: '#06b6d4', approved: '#6366f1', pending_approval: '#f59e0b', posting: '#8b5cf6', skipped: '#4b5563', needs_verification: '#ef4444', error: '#ef4444' };
-const POST_STATUS_LABEL = { posted: 'POSTED', done: 'POSTED', scheduled: 'SCHEDULED', approved: 'QUEUED', pending_approval: 'PENDING', posting: 'POSTING…', skipped: 'SKIPPED', needs_verification: 'NEEDS VERIFY', error: 'ERROR' };
+// scheduled_native = Google's own scheduler owns publishing (9:00 AM CT); the
+// worker only verifies, so no POST TODAY / OVERDUE urgency applies to it.
+const POST_STATUS_COLOR = { posted: '#10b981', done: '#10b981', scheduled: '#06b6d4', scheduled_native: '#06b6d4', approved: '#6366f1', pending_approval: '#f59e0b', posting: '#8b5cf6', skipped: '#4b5563', needs_verification: '#ef4444', error: '#ef4444' };
+const POST_STATUS_LABEL = { posted: 'POSTED', done: 'POSTED', scheduled: 'SCHEDULED', scheduled_native: 'AUTO 9AM', approved: 'QUEUED', pending_approval: 'PENDING', posting: 'POSTING…', skipped: 'SKIPPED', needs_verification: 'NEEDS VERIFY', error: 'ERROR' };
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function clean(str) {
@@ -78,7 +80,7 @@ function WeekPostsSection({ weekPosts, promoted }) {
   const gbpCount = weekPosts.gbp?.length || 0;
   const fbPosted = weekPosts.facebook?.filter(p => p.status === 'posted' || p.status === 'done').length || 0;
   const gbpPosted = weekPosts.gbp?.filter(p => p.status === 'posted' || p.status === 'done').length || 0;
-  const gbpScheduled = weekPosts.gbp?.filter(p => p.status === 'scheduled').length || 0;
+  const gbpScheduled = weekPosts.gbp?.filter(p => p.status === 'scheduled' || p.status === 'scheduled_native').length || 0;
 
   return (
     <div style={{ marginTop: promoted ? 0 : 32, marginBottom: promoted ? 24 : 0 }}>
@@ -223,10 +225,11 @@ function StatusBadge({ label, color }) {
   );
 }
 
-function ActionCard({ action, onApprove, onRun, busy }) {
+function ActionCard({ action, onApprove, onRun, onRetry, busy }) {
   const [approving, setApproving] = useState(false);
   const [running, setRunning] = useState(false);
   const [dismissing, setDismissing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [result, setResult] = useState(null);
   // Optimistic local approve flag. The /seo/actions payload bucket-maps
   // 'approved' → 'pending' (correct for mav-bridge polling), so without this
@@ -277,16 +280,34 @@ function ActionCard({ action, onApprove, onRun, busy }) {
     }
   };
 
+  const handleRetry = async () => {
+    setRetrying(true);
+    setResult(null);
+    try {
+      const res = await retrySeoAction(action.id, action.title || action.label || '', action.type);
+      setResult({ ok: true, msg: res.message || 'Retry queued.' });
+      onRetry?.() || onRun?.();
+    } catch (err) {
+      setResult({ ok: false, msg: err.message });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const isPending = action.status === 'pending';
   // action.approval is the server-side flag (set once status flips past
   // pending_approval). `approved` is the local optimistic flag (set on click).
   const isApproved = approved || (action.status === 'pending' && Boolean(action.approval));
   const canApprove = action.status === 'pending' && action.approval_required && !isApproved;
+  const isFailed = action.status === 'failed' || Boolean(action.status_detail?.includes?.('stuck')) || Boolean(action.status_detail === 'stuck');
+  const showFailedActions = isFailed || (result && !result.ok);
+  const canSkip = (canApprove || isFailed) && (action.type === 'website_task' || action.type === 'weekly_post');
   const badge = STATUS_BADGE[action.status] || STATUS_BADGE.pending;
   const media = action.media_status && action.media_status !== 'n/a' ? MEDIA_ICON[action.media_status] : null;
+  const anyBusy = approving || running || dismissing || retrying || busy;
 
   return (
-    <div style={{ background: '#1a1d26', border: `1px solid ${isPending ? '#f59e0b33' : '#2a2f45'}`, borderRadius: 8, padding: '14px 18px', marginBottom: 10 }}>
+    <div style={{ background: '#1a1d26', border: `1px solid ${isFailed ? '#ef444433' : isPending ? '#f59e0b33' : '#2a2f45'}`, borderRadius: 8, padding: '14px 18px', marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <StatusBadge label={TYPE_LABEL[action.type] || action.type} color="#6b7280" />
         <span style={{ color: '#f1f5f9', fontWeight: 600, flex: 1, fontSize: 14 }}>{action.title}</span>
@@ -301,21 +322,21 @@ function ActionCard({ action, onApprove, onRun, busy }) {
         <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }} title={action.error}>{action.error}</div>
       )}
 
-      {(canApprove || (isApproved && Boolean(action.live_adapter))) && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      {(canApprove || (isApproved && Boolean(action.live_adapter)) || showFailedActions) && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           {canApprove && (
             <button
               onClick={handleApprove}
-              disabled={approving || running || dismissing || busy}
+              disabled={anyBusy}
               style={{ flex: 1, padding: '9px 0', background: approving ? '#2a2f45' : '#10b981', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: approving ? 'not-allowed' : 'pointer' }}
             >
               {approving ? 'Approving...' : '✓ APPROVE'}
             </button>
           )}
-          {canApprove && (action.type === 'website_task' || action.type === 'weekly_post') && (
+          {canSkip && (
             <button
               onClick={handleDismiss}
-              disabled={approving || running || dismissing || busy}
+              disabled={anyBusy}
               style={{ padding: '9px 14px', background: 'transparent', border: '1px solid #2a2f45', borderRadius: 6, color: '#6b7280', fontSize: 13, fontWeight: 700, cursor: dismissing ? 'not-allowed' : 'pointer' }}
             >
               {dismissing ? '...' : '✕ SKIP'}
@@ -324,10 +345,19 @@ function ActionCard({ action, onApprove, onRun, busy }) {
           {isApproved && Boolean(action.live_adapter) && (
             <button
               onClick={handleRun}
-              disabled={approving || running || dismissing || busy}
+              disabled={anyBusy}
               style={{ flex: 1, padding: '9px 0', background: running ? '#2a2f45' : '#6366f1', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontWeight: 700, cursor: running ? 'not-allowed' : 'pointer' }}
             >
               {running ? 'Running...' : '▶ RUN LIVE'}
+            </button>
+          )}
+          {showFailedActions && (
+            <button
+              onClick={handleRetry}
+              disabled={anyBusy}
+              style={{ flex: 1, padding: '9px 0', background: retrying ? '#2a2f45' : '#f59e0b', border: 'none', borderRadius: 6, color: '#0f1117', fontSize: 13, fontWeight: 700, cursor: retrying ? 'not-allowed' : 'pointer' }}
+            >
+              {retrying ? 'Retrying...' : '▶ RETRY'}
             </button>
           )}
         </div>
@@ -349,7 +379,7 @@ const EVENT_COLOR = { approved: '#10b981', run: '#6366f1' };
 // bucketed as 'pending' even after approval, which made the page render a wall
 // of near-identical cards. Group them into one summary header that expands on
 // click — individual tasks still get full ActionCard detail when expanded.
-function WebsiteTasksCard({ tasks, onApprove, onRun }) {
+function WebsiteTasksCard({ tasks, onApprove, onRun, onRetry }) {
   const [open, setOpen] = useState(false);
   const pending = tasks.filter(t => t.status === 'pending' && t.approval_required).length;
   const failed = tasks.filter(t => t.status === 'failed').length;
@@ -382,7 +412,7 @@ function WebsiteTasksCard({ tasks, onApprove, onRun }) {
       {open && (
         <div style={{ marginTop: 6, paddingLeft: 12, borderLeft: '1px solid #2a2f45', marginLeft: 8 }}>
           {tasks.map(action => (
-            <ActionCard key={action.id} action={action} onApprove={onApprove} onRun={onRun} />
+            <ActionCard key={action.id} action={action} onApprove={onApprove} onRun={onRun} onRetry={onRetry} />
           ))}
         </div>
       )}
@@ -440,6 +470,9 @@ export default function SEOApprovalPage() {
   const [genStart, setGenStart] = useState('');
   const [genLoading, setGenLoading] = useState(false);
   const [genResult, setGenResult] = useState(null);
+  const [dismissedFaults, setDismissedFaults] = useState(() => new Set());
+  const [dismissedAlertIds, setDismissedAlertIds] = useState(() => new Set());
+  const [faultBusy, setFaultBusy] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -451,6 +484,11 @@ export default function SEOApprovalPage() {
       setTaskLog(tl.tasks || []);
       setError(null);
       setLastUpdated(new Date());
+      // Upstream empty → drop local dismiss overlays so a new fault can reappear
+      if (!(ac.alerts || []).length && !(wf.faults || []).length) {
+        setDismissedAlertIds(new Set());
+        setDismissedFaults(new Set());
+      }
 
       // If run is awaiting_prompt, fetch the pending prompt
       if (wf?.state === 'awaiting_prompt') {
@@ -537,15 +575,19 @@ export default function SEOApprovalPage() {
   const otherWeeklyCards = weeklyPostCards.filter(a => a.status !== 'pending' && a.status !== 'completed');
 
   const websiteTasks = actions.filter(a => a.type === 'website_task');
-  const completedActions = actions.filter(a => a.status === 'completed');
+    const completedActions = actions.filter(a => a.status === 'completed');
+    // Always surface failed cards in their own top section (easy to miss under Other/collapsed)
+    const failedActions = actions.filter(a =>
+      a.status === 'failed' || a.status_detail === 'stuck' || String(a.status_detail || '').includes('stuck')
+    );
 
-  // Pending count for the summary bar reflects what actually needs the user's
-  // attention: seo_run + weekly_post cards that are still actionable. Website
-  // tasks are collapsed, so don't surface their count at the top level.
-  const pendingCount = pendingRunCards.length + pendingWeeklyCards.length;
+    // Pending count for the summary bar reflects what actually needs the user's
+    // attention: seo_run + weekly_post cards that are still actionable. Website
+    // tasks are collapsed, so don't surface their count at the top level.
+    const pendingCount = pendingRunCards.length + pendingWeeklyCards.length;
 
-  return (
-    <div style={{ padding: '24px 28px', maxWidth: 920, margin: '0 auto' }}>
+    return (
+      <div style={{ padding: '24px 28px', maxWidth: 920, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12 }}>
@@ -557,6 +599,16 @@ export default function SEOApprovalPage() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => { setLoading(false); load(); }}
+            style={{
+              padding: '7px 14px', background: 'transparent',
+              border: '1px solid #2a2f45', borderRadius: 6, color: '#94a3b8',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            ↻ Refresh
+          </button>
           <button
             onClick={() => { setGenOpen(o => !o); setGenResult(null); }}
             style={{
@@ -616,24 +668,93 @@ export default function SEOApprovalPage() {
         </div>
       )}
 
-      {loading && (
+      {loading && !workflow && (
         <div style={{ color: '#6b7280', textAlign: 'center', padding: 60 }}>Loading pipeline status...</div>
       )}
 
       {error && (
-        <div style={{ background: '#ef444422', border: '1px solid #ef444444', borderRadius: 8, padding: '12px 16px', color: '#ef4444', marginBottom: 20 }}>
-          ✗ {error}
+        <div style={{ background: '#ef444422', border: '1px solid #ef444444', borderRadius: 8, padding: '12px 16px', color: '#ef4444', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span>✗ {error}</span>
+          <button
+            onClick={() => { setError(null); load(); }}
+            style={{
+              padding: '6px 12px', background: 'transparent', border: '1px solid #ef444466',
+              borderRadius: 6, color: '#ef4444', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            ▶ Retry
+          </button>
         </div>
       )}
 
-      {!loading && !error && workflow && (
+      {!loading && workflow && (() => {
+        const visibleAlerts = alerts.filter(a => !dismissedAlertIds.has(a.id));
+        const wfFaults = workflow.faults || [];
+        const visibleFaults = wfFaults
+          .map((f, i) => ({ text: f, key: typeof f === 'string' ? f : `wf-${i}` }))
+          .filter(f => !dismissedFaults.has(f.key));
+        const alertCount = visibleAlerts.length + visibleFaults.length;
+
+        const dismissAlert = async (a) => {
+          setFaultBusy(`alert-${a.id}`);
+          try {
+            if (a.action_id) {
+              await clearSeoFault(a.action_id, a.title || '', '', 'ack', a.fault_type || '');
+            }
+            setDismissedAlertIds(prev => new Set(prev).add(a.id));
+            await load();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setFaultBusy(null);
+          }
+        };
+
+        const retryAlert = async (a) => {
+          if (!a.action_id) return;
+          setFaultBusy(`retry-${a.id}`);
+          try {
+            await retrySeoAction(a.action_id, a.title || '', a.type || '');
+            await load();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setFaultBusy(null);
+          }
+        };
+
+        const clearAllVisible = async () => {
+          setFaultBusy('clear-all');
+          try {
+            for (const a of visibleAlerts) {
+              if (a.action_id) {
+                try {
+                  await clearSeoFault(a.action_id, a.title || '', '', 'ack', a.fault_type || '');
+                } catch { /* best-effort */ }
+              }
+              setDismissedAlertIds(prev => new Set(prev).add(a.id));
+            }
+            setDismissedFaults(prev => {
+              const next = new Set(prev);
+              visibleFaults.forEach(f => next.add(f.key));
+              return next;
+            });
+            await load();
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setFaultBusy(null);
+          }
+        };
+
+        return (
         <>
           {/* Summary bar */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
             {[
               { label: 'Pending Approval', value: pendingCount, color: '#f59e0b' },
               { label: 'Reports Generated', value: workflow.activeWorkflow?.reportsGenerated ?? 0, color: '#10b981' },
-              { label: 'Alerts', value: alerts.length + (workflow.faults || []).length, color: '#ef4444' },
+              { label: 'Alerts', value: alertCount, color: '#ef4444' },
             ].map(s => (
               <div key={s.label} style={{ background: '#1a1d26', border: '1px solid #2a2f45', borderRadius: 8, padding: '12px 18px', flex: 1, textAlign: 'center' }}>
                 <div style={{ color: s.color, fontSize: 22, fontWeight: 700 }}>{s.value}</div>
@@ -642,16 +763,66 @@ export default function SEOApprovalPage() {
             ))}
           </div>
 
-          {/* Alerts — same deduped list the HomePage banner uses (no double alert) */}
-          {(alerts.length > 0 || (workflow.faults || []).length > 0) && (
+          {/* Alerts / faults strip */}
+          {(visibleAlerts.length > 0 || visibleFaults.length > 0) && (
             <div style={{ background: '#ef444411', border: '1px solid #ef444433', borderRadius: 8, padding: '10px 14px', marginBottom: 20 }}>
-              {alerts.map((a) => (
-                <div key={a.id} style={{ color: a.severity === 'warn' ? '#f59e0b' : '#ef4444', fontSize: 12, marginBottom: 4 }}>
-                  ⚠ {a.title}{a.detail ? ` — ${a.detail}` : ''}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
+                  Alerts ({alertCount})
+                </span>
+                <button
+                  onClick={clearAllVisible}
+                  disabled={faultBusy === 'clear-all'}
+                  style={{
+                    padding: '4px 10px', background: 'transparent', border: '1px solid #ef444444',
+                    borderRadius: 5, color: '#94a3b8', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  {faultBusy === 'clear-all' ? '...' : 'Clear all'}
+                </button>
+              </div>
+              {visibleAlerts.map((a) => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ color: a.severity === 'warn' ? '#f59e0b' : '#ef4444', fontSize: 12, flex: 1, minWidth: 0 }}>
+                    ⚠ {a.title}{a.detail ? ` — ${a.detail}` : ''}
+                  </span>
+                  <button
+                    onClick={() => dismissAlert(a)}
+                    disabled={faultBusy === `alert-${a.id}`}
+                    style={{
+                      padding: '3px 8px', background: 'transparent', border: '1px solid #2a2f45',
+                      borderRadius: 4, color: '#6b7280', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                  {a.action_id && (
+                    <button
+                      onClick={() => retryAlert(a)}
+                      disabled={faultBusy === `retry-${a.id}`}
+                      style={{
+                        padding: '3px 8px', background: 'transparent', border: '1px solid #f59e0b55',
+                        borderRadius: 4, color: '#f59e0b', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      ▶ Retry
+                    </button>
+                  )}
                 </div>
               ))}
-              {(workflow.faults || []).map((f, i) => (
-                <div key={`wf-${i}`} style={{ color: '#ef4444', fontSize: 12 }}>⚠ {f}</div>
+              {visibleFaults.map((f) => (
+                <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ color: '#ef4444', fontSize: 12, flex: 1 }}>⚠ {f.text}</span>
+                  <button
+                    onClick={() => setDismissedFaults(prev => new Set(prev).add(f.key))}
+                    style={{
+                      padding: '3px 8px', background: 'transparent', border: '1px solid #2a2f45',
+                      borderRadius: 4, color: '#6b7280', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -664,7 +835,7 @@ export default function SEOApprovalPage() {
                 <span style={{ color: '#f1f5f9', fontWeight: 700, fontSize: 14 }}>Day 1 Video Prompt — Review &amp; Approve</span>
               </div>
               <p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 12px' }}>
-                GPT-4o enhanced Veo3 prompt for the first day Facebook video. Edit if needed, then approve to start video generation.
+                Grok-enhanced video prompt for the first day Facebook video (Grok Imagine). Edit if needed, then approve to start video generation.
               </p>
               <textarea
                 value={editedPrompt}
@@ -703,18 +874,37 @@ export default function SEOApprovalPage() {
             <WeekPostsSection weekPosts={weekPosts} promoted />
           )}
 
-          {/* Pending seo_run + weekly_post cards (weekly_post cards are hidden
-              entirely once approved — they're in the grid above). */}
-          {(pendingRunCards.length > 0 || pendingWeeklyCards.length > 0) && (
+          {/* Failed actions — promoted recovery zone (Retry / Skip always here) */}
+                    {failedActions.length > 0 && (
+                      <>
+                        <div style={{
+                          color: '#ef4444', fontSize: 12, fontWeight: 800, letterSpacing: 1,
+                          textTransform: 'uppercase', marginBottom: 10,
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                        }}>
+                          <span>Needs recovery ({failedActions.length})</span>
+                          <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 600, letterSpacing: 0, textTransform: 'none' }}>
+                            Use ▶ RETRY or ✕ SKIP on each card
+                          </span>
+                        </div>
+                        {failedActions.map(action => (
+                          <ActionCard key={`fail-${action.id}`} action={action} onApprove={load} onRun={load} onRetry={load} />
+                        ))}
+                      </>
+                    )}
+
+                    {/* Pending seo_run + weekly_post cards (weekly_post cards are hidden
+                        entirely once approved — they're in the grid above). */}
+                    {(pendingRunCards.length > 0 || pendingWeeklyCards.length > 0) && (
             <>
               <div style={{ color: '#f59e0b', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>
                 Awaiting Approval ({pendingRunCards.length + pendingWeeklyCards.length})
               </div>
               {pendingRunCards.map(action => (
-                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
+                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} onRetry={load} />
               ))}
               {pendingWeeklyCards.map(action => (
-                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
+                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} onRetry={load} />
               ))}
             </>
           )}
@@ -727,7 +917,7 @@ export default function SEOApprovalPage() {
               <div style={{ color: '#6b7280', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', margin: '20px 0 10px' }}>
                 Website Tasks
               </div>
-              <WebsiteTasksCard tasks={websiteTasks} onApprove={load} onRun={load} />
+              <WebsiteTasksCard tasks={websiteTasks} onApprove={load} onRun={load} onRetry={load} />
             </>
           )}
 
@@ -738,10 +928,10 @@ export default function SEOApprovalPage() {
                 Other Actions ({otherRunCards.length + otherWeeklyCards.length})
               </div>
               {otherRunCards.map(action => (
-                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
+                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} onRetry={load} />
               ))}
               {otherWeeklyCards.map(action => (
-                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} />
+                <ActionCard key={action.id} action={action} onApprove={load} onRun={load} onRetry={load} />
               ))}
             </>
           )}
@@ -775,7 +965,8 @@ export default function SEOApprovalPage() {
           )}
           <TaskActivity tasks={taskLog} />
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }
