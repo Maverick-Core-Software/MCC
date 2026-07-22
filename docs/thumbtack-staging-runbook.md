@@ -142,6 +142,33 @@ The legacy v2 API runs on a separate host (`staging-pro-api.thumbtack.com`) and 
 
 ---
 
+## Staging Validation Results (2026-07-22)
+
+### OAuth flow
+- ✅ Staging OAuth start route (`/api/integrations/thumbtack/oauth/staging/start`) returns 302 redirect to `staging-auth.thumbtack.com` with correct parameters
+- ✅ Manual authorization completed in browser — Thumbtack staging login → consent → callback
+- ✅ Callback (`/api/integrations/thumbtack/oauth/staging/callback`) exchanged code server-side and persisted encrypted token set
+- ✅ Token store verified: AES-256-GCM encrypted at rest, no plaintext leakage, metadata-only outer JSON
+- ✅ Token details: `environment=staging`, `tokenType=bearer`, access token 1189 chars, expires 3600s, refresh token present
+
+### API validation
+- ✅ API adapter loads token from encrypted store → sends Bearer-authenticated request to `staging-api.thumbtack.com`
+- ✅ Error handling verified: HTTP 401 returned with `detail` and `traceID` — adapter logs redacted error, no token leakage
+- ⚠️ **Scope limitation:** Current approved scope (`supply::negotiations.write` + `offline_access`) does NOT include `supply::businesses.list`. The `GET /api/v4/businesses` endpoint returns 401 with `"required scope(s) [supply::businesses.list] not found"`. This is expected — Thumbtack provisions this scope separately.
+- ℹ️ Business-specific endpoints (`/api/v4/businesses/{businessID}/negotiations`, `/api/v4/businesses/{businessID}/associate-phone-numbers`) require a `businessID` path parameter. To test these, request `supply::businesses.list` scope from Thumbtack or obtain the business ID from the Thumbtack partner portal.
+
+### Write gate verification
+- ✅ `sendMessage()` and `postJobSignal()` throw when `allowWrites=false` (default)
+- ✅ Write capabilities are fully implemented but disabled — no message or job signal can be sent without explicitly enabling
+
+### Next steps for full staging validation
+1. Request `supply::businesses.list` scope from Thumbtack to enable business discovery
+2. Re-authorize with expanded scope set
+3. Test read primitives with real business data
+4. **STOP** — request explicit approval from Carter before testing any write primitive
+
+---
+
 ## Security Notes
 
 - **No secrets in this runbook.** Client IDs, Client Secrets, access tokens, and refresh tokens are stored in `.env` (local) or the encrypted token store.
