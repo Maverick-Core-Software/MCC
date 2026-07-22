@@ -1,7 +1,7 @@
 // PM2 ecosystem config — AIWA CT 103 (mav-console)
 // Deploy path: /opt/mcc (clone of maverick-core-software/MCC)
 // Environment secrets are injected by the AIWA secret pipeline.
-require('dotenv').config({ path: '/opt/mcc/.env' });
+require('dotenv').config({ path: process.env.MCC_ENV_FILE || '/etc/mcc/mav-console.env' });
 
 module.exports = {
   apps: [
