@@ -27,6 +27,7 @@ import { handleChat, handleBuildChat } from './lib/chat.mjs';
 import { applyStagedRun, handleListDirs } from './routes/build.mjs';
 import { handlePhotoUpload } from './routes/photos.mjs';
 import { getThumbtackWebhookStatus, handleThumbtackWebhook } from './routes/thumbtack.mjs';
+import { handleStagingStart, handleStagingCallback } from './routes/thumbtack-oauth.mjs';
 
 // __dirname kept for code not yet modularized; equals config.rootDir.
 const __dirname = rootDir;
@@ -86,6 +87,14 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/webhooks/thumbtack' && req.method === 'POST') {
     await handleThumbtackWebhook(req, res);
+    return;
+  }
+  if (url.pathname === '/api/integrations/thumbtack/oauth/staging/start' && req.method === 'GET') {
+    handleStagingStart(req, res);
+    return;
+  }
+  if (url.pathname === '/api/integrations/thumbtack/oauth/staging/callback' && req.method === 'GET') {
+    await handleStagingCallback(req, res);
     return;
   }
   if (url.pathname === '/api/rag' && req.method === 'POST') {
