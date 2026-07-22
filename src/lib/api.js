@@ -57,6 +57,12 @@ export async function queryModelStatus() {
   return response.json();
 }
 
+export async function queryZaiStatus() {
+  const response = await fetch(api('/api/llm/zai-status'), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`z.ai status failed: ${response.status}`);
+  return response.json();
+}
+
 export async function queryDeployStatus() {
   const response = await fetch(api('/api/deploy/status'), { cache: 'no-store' });
   if (!response.ok) throw new Error(`Deploy status failed: ${response.status}`);

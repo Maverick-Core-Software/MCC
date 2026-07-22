@@ -31,6 +31,7 @@ module.exports = {
         PROMETHEUS_URL: process.env.PROMETHEUS_URL || 'http://192.168.1.12:9090',
         MAV_RAG_URL: process.env.MAV_RAG_URL || 'http://192.168.1.12:8181',
         MAV_EXTRA_ROOTS: process.env.MAV_EXTRA_ROOTS || '',
+        THUMBTACK_WEBHOOK_SECRET: process.env.THUMBTACK_WEBHOOK_SECRET || '',
         SUPABASE_URL: process.env.SUPABASE_URL || '',
         SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
         VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || '',

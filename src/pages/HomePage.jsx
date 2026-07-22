@@ -17,7 +17,7 @@ const STATUS_BADGE = {
 const PRIORITY_COLOR = { critical: '#ef4444', high: '#f59e0b', medium: '#6366f1', low: '#6b7280' };
 const MEDIA_ICON = { video: '🎬 video', photo: '✅ photo', downgraded: '⚠️ photo (no video)', none: '⛔ no media' };
 
-export function HomePage({ modelStatus }) {
+export function HomePage({ modelStatus, zaiStatus }) {
   const orchestratorStatus = useOrchestratorStatus();
   const seoWorkflow = useSeoWorkflow();
   const [actionQueue, setActionQueue] = useState(null);
@@ -261,6 +261,13 @@ export function HomePage({ modelStatus }) {
               {modelStatus.model ? modelStatus.model.replace(/^[^/]+\//, '') : (modelStatus.state === 'loading' ? '...' : 'OFFLINE')}
             </strong>
             <em>{modelStatus.contextTokens != null ? `${modelStatus.contextTokens.toLocaleString()} CTX` : modelStatus.state.toUpperCase()}</em>
+          </div>
+          <div>
+            <span>Z.AI BRAIN</span>
+            <strong style={{ fontSize: '16px' }}>
+              {zaiStatus?.state === 'online' ? 'GLM 5.2' : (zaiStatus?.state === 'loading' ? '...' : 'OFFLINE')}
+            </strong>
+            <em>{zaiStatus?.state === 'online' ? 'ASK / VISION' : (zaiStatus?.state || 'OFFLINE').toUpperCase()}</em>
           </div>
         </div>
       </Panel>

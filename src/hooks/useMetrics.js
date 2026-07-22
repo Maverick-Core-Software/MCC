@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FALLBACK } from '../config/metrics.js';
-import { queryAllMetrics, queryDeployStatus, queryModelStatus, queryOrchestratorStatus, querySeoWorkflow } from '../lib/api.js';
+import { queryAllMetrics, queryDeployStatus, queryModelStatus, queryZaiStatus, queryOrchestratorStatus, querySeoWorkflow } from '../lib/api.js';
 import { supabase } from '../supabase.js';
 
 async function fetchNodeStatusField(field) {
@@ -107,6 +107,31 @@ export function useModelStatus() {
   }, []);
 
   return modelStatus;
+}
+
+// z.ai (GLM 5.2) — cloud API status for the dashboard's "Z.AI BRAIN" indicator.
+// No supabase fallback: z.ai is always-on cloud, so a failed ping = offline.
+export function useZaiStatus() {
+  const [zaiStatus, setZaiStatus] = useState({
+    state: 'loading', provider: 'z.ai', textModel: null, visionModel: null, error: null
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const next = await queryZaiStatus();
+        if (!cancelled) setZaiStatus({ ...next, error: null });
+      } catch {
+        if (!cancelled) setZaiStatus(s => ({ ...s, state: 'offline' }));
+      }
+    }
+    load();
+    const timer = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
+
+  return zaiStatus;
 }
 
 export function useDeployStatus() {

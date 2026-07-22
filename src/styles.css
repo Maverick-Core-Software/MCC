@@ -1733,6 +1733,7 @@ body {
 }
 
 .claudeMgrChip,
+.zaiMgrChip,
 .promptMetaPanel {
   min-height: 74px;
   padding: 9px;
@@ -1740,24 +1741,30 @@ body {
   border-radius: 3px;
 }
 
-.claudeMgrChip {
+.claudeMgrChip,
+.zaiMgrChip {
   display: grid;
   align-content: center;
   gap: 5px;
   border-left: 3px solid var(--red);
 }
 
-.claudeMgrChip.ok {
+.claudeMgrChip.ok,
+.zaiMgrChip.ok {
   border-left-color: var(--green);
 }
 
-.claudeMgrChip.loading {
+.claudeMgrChip.loading,
+.zaiMgrChip.loading {
   border-left-color: #d9bf6f;
 }
 
 .claudeMgrChip span,
 .claudeMgrChip strong,
 .claudeMgrChip em,
+.zaiMgrChip span,
+.zaiMgrChip strong,
+.zaiMgrChip em,
 .promptMetaGrid span,
 .promptMetaGrid strong {
   display: block;
@@ -1765,6 +1772,7 @@ body {
 }
 
 .claudeMgrChip span,
+.zaiMgrChip span,
 .promptMetaGrid span {
   color: var(--muted);
   font-size: 11px;
@@ -1772,13 +1780,15 @@ body {
   letter-spacing: .04em;
 }
 
-.claudeMgrChip strong {
+.claudeMgrChip strong,
+.zaiMgrChip strong {
   color: #f0f2f4;
   font-size: 20px;
   font-weight: 900;
 }
 
-.claudeMgrChip em {
+.claudeMgrChip em,
+.zaiMgrChip em {
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
@@ -3097,6 +3107,7 @@ body {
 .dashboard[data-theme="ops-glass"] .modelState,
 .dashboard[data-theme="ops-glass"] .modelMetaGrid div,
 .dashboard[data-theme="ops-glass"] .claudeMgrChip,
+.dashboard[data-theme="ops-glass"] .zaiMgrChip,
 .dashboard[data-theme="ops-glass"] .promptMetaPanel,
 .dashboard[data-theme="ops-glass"] .driveBlock,
 .dashboard[data-theme="ops-glass"] .hardwareSpecStrip div,
@@ -3129,6 +3140,7 @@ body {
 .dashboard[data-theme="ops-glass"] .modelState,
 .dashboard[data-theme="ops-glass"] .modelMetaGrid div,
 .dashboard[data-theme="ops-glass"] .claudeMgrChip,
+.dashboard[data-theme="ops-glass"] .zaiMgrChip,
 .dashboard[data-theme="ops-glass"] .promptMetaPanel,
 .dashboard[data-theme="ops-glass"] .driveBlock,
 .dashboard[data-theme="ops-glass"] .hardwareSpecStrip div,

@@ -22,7 +22,7 @@ frozen snapshot — it is rewritten only by `pm2 save` and its env blocks go sta
 | homelab-agent-sensors | 7331 | `C:\Workspace\Shared\Agents\HomeLab-Agent\ecosystem.config.cjs` | `sensor_agent.py` (python) | Sensor mode: `NTFY_ENABLED=false` set explicitly in the ecosystem env |
 | fb-comment-agent | 8795 | `C:\Workspace\Active\SEO-Agents-App\ecosystem.config.cjs` | `scripts\facebook-comment-agent.mjs` | Ecosystem file added 2026-07-19 (was dump-only) |
 | maverick-dashboard | 8792 | `C:\Workspace\Shared\Maverick Integrations\workflows\dashboard\ecosystem.config.cjs` | `server.mjs --port 8792` | Ecosystem file added 2026-07-19 (was dump-only, empty/wrong cwd in dump). Folder is NOT a git repo |
-| housecall-pro-mcp | 7332 (full), 7333 (lite) | `C:\Workspace\Infrastructure\housecall-pro-mcp\ecosystem.config.cjs` | `dist\index.js` | ONE process listening on both ports; 7333 exposes only the filtered lite tool list |
+| housecall-pro-mcp | — (legacy archive) | `C:\Workspace\Infrastructure\housecall-pro-mcp\ecosystem.config.cjs` | `dist\index.js` | **Migrated to CT102 on 2026-07-21.** The PM2 entry is stopped and retained only for an explicitly approved rollback; CT102 `hcp-mcp.service` is authoritative on `:7332`/`:7333`. |
 | pc-actions-daemon | 8901 | `C:\Workspace\Shared\Agents\Hermes-Supervisor\pc-actions-daemon\ecosystem.local.config.cjs` | `uvicorn main:app` (python) | Owning file is local-only/gitignored (contains PC_ACTIONS_TOKEN) |
 
 ## Defined in ecosystem files but NOT in the dump
@@ -41,11 +41,21 @@ These are registered on next `pm2 start <file>` + `pm2 save`; they are not runni
 
 - **Orphan duplicate dashboard on port 8793** — not pm2-managed, dies at reboot.
   Do NOT migrate it into pm2; let it die.
-- **`\housecall-pro-mcp` logon scheduled task** — a competing launcher for the
-  HCP MCP outside pm2. Slated for disable in the privileged cutover.
-- **Second HCP-MCP instance on LXC `192.168.1.14:7332`** — new, under a ~48-hour
-  observation period (through ~2026-07-21) before a planned full migration. The
-  LOCAL pm2 app stays authoritative until that cutover.
+- **HCP MCP is no longer a Windows PM2 workload.** The Windows `HCP Session
+  Relogin` task is disabled, the stopped PM2 entry is rollback-only, and CT102
+  (`192.168.1.14`) is the production runtime. Do not restart the archived PM2
+  entry except as an explicitly approved rollback.
+
+## CT103 `mav-console` deployment boundary
+
+CT103 `mav-console` is **not** a Windows PM2 app and is not counted in the
+table above. CT103 owns its production release; the `mav-console` entry in this
+registry remains the PC copy and an approval-only rollback option. Normal CT103
+deployment or rollback must not stop, restart, or modify that PC process. A
+normal rollback returns CT103 to its prior exact release; using the PC copy
+requires a separate explicit approval. `aiwa-host` is limited to host/LXC
+configuration, while `mav-console` operations belong to CT103 through its
+paired Orca environment.
 
 ## Restarting an app cleanly
 

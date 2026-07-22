@@ -82,13 +82,14 @@ export function Workstation({ metrics }) {
   );
 }
 
-export function ModelOps({ metrics, modelStatus, orchestratorStatus }) {
+export function ModelOps({ metrics, modelStatus, zaiStatus, orchestratorStatus }) {
   const gpuMemUsedGb = formatGbFromBytes(metrics.pcGpuMemUsedBytes);
   const gpuMemTotalGb = formatGbFromBytes(metrics.pcGpuMemTotalBytes);
   const gpuMemPercent = metrics.pcGpuMemUsedBytes && metrics.pcGpuMemTotalBytes
     ? (metrics.pcGpuMemUsedBytes / metrics.pcGpuMemTotalBytes) * 100
     : null;
   const modelOnline = modelStatus.state === 'online';
+  const zaiOnline = zaiStatus?.state === 'online';
   const gpuLoad = metrics.pcGpu == null ? null : clampPercent(metrics.pcGpu);
   const runtimeState = !modelOnline
     ? 'OFFLINE'
@@ -146,6 +147,11 @@ export function ModelOps({ metrics, modelStatus, orchestratorStatus }) {
           <span>CLAUDE MGR</span>
           <strong>{claudeReady ? 'READY' : claudeState.toUpperCase()}</strong>
           <em>PLANNER / QC</em>
+        </div>
+        <div className={`zaiMgrChip ${zaiOnline ? 'ok' : 'offline'}`}>
+          <span>Z.AI BRAIN</span>
+          <strong>{zaiOnline ? 'GLM 5.2' : 'OFFLINE'}</strong>
+          <em>ASK / VISION</em>
         </div>
         <div className="promptMetaPanel">
           <div className="promptMetaGrid">
