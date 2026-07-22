@@ -49,7 +49,7 @@ test('CT103 PM2 ecosystem is data-only JSON with no PC-only settings', () => {
   }
 });
 
-test('MCC_ENV_FILE is loaded before MCC configuration without exposing its value', (t) => {
+test('MCC_ENV_FILE overrides inherited PM2 values before MCC configuration without exposing its value', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcc-env-file-'));
   const envFile = path.join(dir, 'mav-console.env');
   const secret = 'ct103-env-file-secret';
@@ -65,7 +65,7 @@ test('MCC_ENV_FILE is loaded before MCC configuration without exposing its value
 
   const result = runProbe(
     `await import(${JSON.stringify(envLoaderUrl)}); const config = await import(${JSON.stringify(configModuleUrl)}); process.stdout.write(JSON.stringify({ port: config.port }));`,
-    { env: childEnv({ MCC_ENV_FILE: envFile }) },
+    { env: childEnv({ MCC_ENV_FILE: envFile, PORT: '39999' }) },
   );
 
   assert.equal(result.status, 0, result.stderr);
