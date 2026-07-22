@@ -1,0 +1,23 @@
+{
+  "apps": [
+    {
+      "name": "mav-console",
+      "script": "server.mjs",
+      "cwd": "/opt/mcc",
+      "interpreter": "node",
+      "watch": false,
+      "autorestart": true,
+      "max_restarts": 10,
+      "min_uptime": "15s",
+      "restart_delay": 4000,
+      "env": {
+        "NODE_ENV": "production",
+        "MCC_ENV_FILE": "/etc/mcc/mav-console.env"
+      },
+      "log_date_format": "YYYY-MM-DD HH:mm:ss",
+      "error_file": "/opt/mcc/logs/mav-console-error.log",
+      "out_file": "/opt/mcc/logs/mav-console-out.log",
+      "merge_logs": true
+    }
+  ]
+}

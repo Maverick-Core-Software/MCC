@@ -40,9 +40,7 @@ npm ci
 npm run build
 node --test tests/memory.test.mjs
 npx vitest run tests/thumbtack-webhook.test.mjs
-$env:MCC_ENV_FILE = 'C:\\mcc-missing-env-for-config-check'
-node -e "require('./ecosystem.config.linux.cjs')"
-Remove-Item Env:MCC_ENV_FILE
+node -e "JSON.parse(require('node:fs').readFileSync('./ecosystem.config.linux.json', 'utf8'))"
 git status --short
 git rev-parse HEAD
 ```
@@ -62,7 +60,7 @@ orca terminal create --environment aiwa-orca \
   --command bash --json
 orca terminal read --environment aiwa-orca --terminal <sandbox-terminal-handle> --json
 orca terminal send --environment aiwa-orca --terminal <sandbox-terminal-handle> \
-  --text 'cd <sandbox-mcc-checkout> && git fetch origin && git checkout --detach <reviewed-commit> && test "$(git rev-parse HEAD)" = "<reviewed-commit>" && npm ci && npm run build && node --test tests/memory.test.mjs && npx vitest run tests/thumbtack-webhook.test.mjs && MCC_ENV_FILE=/etc/mcc/mav-console.env node -e "require(\"./ecosystem.config.linux.cjs\")"' \
+  --text 'cd <sandbox-mcc-checkout> && git fetch origin && git checkout --detach <reviewed-commit> && test "$(git rev-parse HEAD)" = "<reviewed-commit>" && npm ci && npm run build && node --test tests/memory.test.mjs && npx vitest run tests/thumbtack-webhook.test.mjs && node -e "JSON.parse(require(\"node:fs\").readFileSync(\"./ecosystem.config.linux.json\", \"utf8\"))"' \
   --enter --json
 ```
 
@@ -100,7 +98,7 @@ orca terminal create --environment <ct103-orca-environment> \
   --command bash --json
 orca terminal read --environment <ct103-orca-environment> --terminal <ct103-terminal-handle> --json
 orca terminal send --environment <ct103-orca-environment> --terminal <ct103-terminal-handle> \
-  --text 'cd <ct103-mcc-checkout> && git fetch origin && git checkout --detach <reviewed-commit> && test "$(git rev-parse HEAD)" = "<reviewed-commit>" && npm ci && npm run build && MCC_ENV_FILE=/etc/mcc/mav-console.env pm2 startOrReload ecosystem.config.linux.cjs --only mav-console --update-env && curl --fail --silent --show-error http://127.0.0.1:3000/health && curl --fail --silent --show-error http://127.0.0.1:3000/api/deploy/status && git rev-parse HEAD && node -p "require(\"./package.json\").version"' \
+  --text 'cd <ct103-mcc-checkout> && git fetch origin && git checkout --detach <reviewed-commit> && test "$(git rev-parse HEAD)" = "<reviewed-commit>" && npm ci && npm run build && pm2 reload ecosystem.config.linux.json --only mav-console --update-env && curl --fail --silent --show-error http://127.0.0.1:3000/health && curl --fail --silent --show-error http://127.0.0.1:3000/api/deploy/status && git rev-parse HEAD && node -p "require(\"./package.json\").version"' \
   --enter --json
 ```
 

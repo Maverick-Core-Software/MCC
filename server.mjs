@@ -1,4 +1,6 @@
-import 'dotenv/config';
+// Must remain before config-dependent imports: this loads MCC_ENV_FILE (when
+// provided) or the normal working-directory .env without logging its contents.
+import './lib/load-env.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
