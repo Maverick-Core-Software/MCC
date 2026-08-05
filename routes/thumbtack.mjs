@@ -13,6 +13,7 @@ import {
   thumbtackWebhookSecret,
 } from '../lib/config.mjs';
 import { readJsonBody, sendJson } from '../lib/http.mjs';
+import { extractCustomerLeadEvent } from '../lib/thumbtack-lead-state.mjs';
 import { getThumbtackAutomationStatus } from '../lib/thumbtack-policy.mjs';
 
 const loadedEventIds = new Map();
@@ -95,7 +96,7 @@ export function createThumbtackWebhookHandler({
     const id = crypto.createHash('sha256').update(payloadJson).digest('hex');
     const ids = getEventIds(eventsFile);
     if (ids.has(id)) {
-      sendJson(res, 200, { received: true, duplicate: true, mode: 'capture-only' });
+      sendJson(res, 200, { received: true, duplicate: true, mode: automation.mode });
       return;
     }
 
@@ -109,6 +110,7 @@ export function createThumbtackWebhookHandler({
     try {
       fs.mkdirSync(path.dirname(eventsFile), { recursive: true });
       fs.appendFileSync(eventsFile, `${JSON.stringify(record)}\n`, 'utf8');
+      const lead = extractCustomerLeadEvent(record);
       // Shadow records form an auditable queue for the lead-state engine. They
       // never include a generated response, invoke HCP, or send Thumbtack API writes.
       fs.appendFileSync(automationFile, `${JSON.stringify({
@@ -118,7 +120,8 @@ export function createThumbtackWebhookHandler({
         negotiationID: record.negotiationID,
         messageID: record.messageID,
         mode: automation.mode,
-        action: 'awaiting-lead-state-processing',
+        action: lead ? 'awaiting-qualification' : 'ignored-noncustomer-event',
+        ...(lead ? { operationId: lead.operationId } : {}),
       })}\n`, 'utf8');
       ids.add(id);
     } catch (error) {

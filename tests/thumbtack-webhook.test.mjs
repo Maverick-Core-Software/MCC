@@ -72,7 +72,7 @@ describe('Thumbtack webhook intake', () => {
     const { handler, eventsFile, automationFile } = makeHandler();
     const payload = {
       eventType: 'MessageCreatedV4',
-      data: { messageID: 'msg-1', negotiationID: 'neg-1', text: 'Can you give me a price?' },
+      data: { messageID: 'msg-1', negotiationID: 'neg-1', from: 'customer', text: 'Can you give me a price?' },
     };
 
     const first = makeResponse();
@@ -97,7 +97,8 @@ describe('Thumbtack webhook intake', () => {
     expect(automationRecords).toEqual([expect.objectContaining({
       id: records[0].id,
       mode: 'shadow',
-      action: 'awaiting-lead-state-processing',
+      action: 'awaiting-qualification',
+      operationId: `thumbtack-${records[0].id}`,
     })]);
   });
 

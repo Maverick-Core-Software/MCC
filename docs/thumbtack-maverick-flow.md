@@ -6,17 +6,18 @@ Maverick must never create an HCP record or estimate merely because a Thumbtack 
 flowchart TD
   A[Thumbtack webhook] --> B[Persist and dedupe event]
   B --> C[Shadow lead-state queue]
-  C --> D[Qualify scope]
-  D --> E[Pricebook verbal estimate]
-  E --> F{Customer wants formal estimate?}
-  F -- No / price shopping --> G[Polite close: no HCP write]
-  F -- Yes --> H[Collect name and service address]
-  H --> I{Explicit consent + validated fields?}
-  I -- No --> H
-  I -- Yes --> J[Create HCP customer/address/estimate]
-  J --> K[Send only after HCP success]
-  K --> L[Customer approves]
-  L --> M[Coordinate in Thumbtack; schedule in HCP]
+  C --> D[Customer-only event gate]
+  D --> E[Qualify scope]
+  E --> F[Pricebook verbal estimate]
+  F --> G{Customer wants formal estimate?}
+  G -- No / price shopping --> H[Polite close: no HCP write]
+  G -- Yes --> I[Collect name, callback phone, and service address]
+  I --> J{Explicit consent + validated fields?}
+  J -- No --> I
+  J -- Yes --> K[Create HCP customer/address/estimate]
+  K --> L[Send only after HCP success]
+  L --> M[Customer approves]
+  M --> N[Coordinate in Thumbtack; schedule in HCP]
 ```
 
 ## Activation gates
