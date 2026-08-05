@@ -64,6 +64,23 @@ describe('Thumbtack API client', () => {
     it('throws when apiBaseUrl is not provided and config is empty', () => {
       expect(() => createThumbtackApiClient({ apiBaseUrl: '' })).toThrow(/apiBaseUrl/i);
     });
+
+    it('rejects an unsupported environment', () => {
+      expect(() => createThumbtackApiClient({ environment: 'development', apiBaseUrl: TEST_API_BASE })).toThrow(/environment/i);
+    });
+
+    it('uses an explicitly supplied production API base without enabling writes', async () => {
+      const fetchSpy = makeMockFetch(200, { businesses: [] });
+      vi.spyOn(globalThis, 'fetch').mockImplementation(fetchSpy);
+      const client = createThumbtackApiClient({
+        environment: 'production',
+        apiBaseUrl: 'https://api.thumbtack.com',
+        tokenStore: makeMockStore(),
+      });
+      await client.getBusinesses();
+      expect(fetchSpy.mock.calls[0][0]).toBe('https://api.thumbtack.com/api/v4/businesses');
+      await expect(client.sendMessage('neg-1', 'test')).rejects.toThrow(/disabled/i);
+    });
   });
 
   describe('read primitives', () => {
@@ -297,6 +314,35 @@ describe('Thumbtack API client', () => {
       // Verify the actual API request used the new token
       const apiCallOpts = fetchSpy.mock.calls[1][1];
       expect(apiCallOpts.headers['Authorization']).toBe('Bearer new-access-token');
+    });
+
+    it('retains the current refresh token when a refresh response omits it', async () => {
+      const mockStore = makeMockStore({ initialTokens: expiredTokenSet() });
+      const fetchSpy = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({ access_token: 'new-access-token', expires_in: 3600 }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          text: async () => JSON.stringify({ businesses: [] }),
+        });
+      vi.spyOn(globalThis, 'fetch').mockImplementation(fetchSpy);
+
+      const client = createThumbtackApiClient({
+        apiBaseUrl: TEST_API_BASE,
+        stagingClientId: TEST_CLIENT_ID,
+        stagingClientSecret: TEST_CLIENT_SECRET,
+        stagingTokenUrl: TEST_TOKEN_URL,
+        tokenStore: mockStore,
+      });
+      await client.getBusinesses();
+
+      expect(mockStore.saveTokens.mock.calls[0][0].refreshToken).toBe('test-refresh-token');
     });
 
     it('uses withRefreshLock for serialized refresh', async () => {

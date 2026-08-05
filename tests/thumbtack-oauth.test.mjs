@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createStagingOAuthHandlers } from '../routes/thumbtack-oauth.mjs';
+import { createProductionOAuthHandlers, createStagingOAuthHandlers } from '../routes/thumbtack-oauth.mjs';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ const TEST_CLIENT_SECRET = 'test-client-secret';
 const TEST_AUTH_URL = 'https://staging-auth.thumbtack.com/oauth2/auth';
 const TEST_TOKEN_URL = 'https://staging-auth.thumbtack.com/oauth2/token';
 const TEST_REDIRECT_URI = 'https://example.com/callback';
-const TEST_SCOPE = 'offline_access supply::negotiations.write';
+const TEST_SCOPE = 'offline_access supply::businesses.list supply::businesses/associate-phone-numbers.read';
 const TEST_ENCRYPTION_KEY = 'test-encryption-key-32chars!!';
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -76,6 +76,29 @@ describe('Thumbtack staging OAuth', () => {
       const req = makeRequest('/api/integrations/thumbtack/oauth/staging/start');
       const res = makeResponse();
       handleStagingStart(req, res);
+      expect(res.status).toBe(503);
+    });
+
+    it.each([
+      ['scope is absent', { scope: '' }],
+      ['scope is malformed', { scope: 'offline_access invalid scope!' }],
+      ['encryption key is absent', { encryptionKey: '' }],
+      ['token store path is absent', { tokenStorePath: '' }],
+    ])('returns 503 when %s', (_reason, invalidConfig) => {
+      const { handleStagingStart } = createStagingOAuthHandlers({
+        stagingClientId: TEST_CLIENT_ID,
+        stagingClientSecret: TEST_CLIENT_SECRET,
+        stagingAuthUrl: TEST_AUTH_URL,
+        stagingTokenUrl: TEST_TOKEN_URL,
+        redirectUri: TEST_REDIRECT_URI,
+        scope: TEST_SCOPE,
+        encryptionKey: TEST_ENCRYPTION_KEY,
+        tokenStorePath: makeTokenStorePath(makeTempDir()),
+        isConfigured: true,
+        ...invalidConfig,
+      });
+      const res = makeResponse();
+      handleStagingStart(makeRequest('/api/integrations/thumbtack/oauth/staging/start'), res);
       expect(res.status).toBe(503);
     });
 
@@ -199,6 +222,59 @@ describe('Thumbtack staging OAuth', () => {
       expect(saved.refreshToken).toBe('test-refresh-token-value');
       expect(saved.scope).toBe(TEST_SCOPE);
       expect(saved.environment).toBe('staging');
+    });
+
+    it('does not report success when durable token persistence fails', async () => {
+      const handlersWithInvalidStorePath = createStagingOAuthHandlers({
+        stagingClientId: TEST_CLIENT_ID,
+        stagingClientSecret: TEST_CLIENT_SECRET,
+        stagingAuthUrl: TEST_AUTH_URL,
+        stagingTokenUrl: TEST_TOKEN_URL,
+        redirectUri: TEST_REDIRECT_URI,
+        scope: TEST_SCOPE,
+        encryptionKey: TEST_ENCRYPTION_KEY,
+        tokenStorePath: tmpDir,
+        isConfigured: true,
+      });
+      const startRes = makeResponse();
+      handlersWithInvalidStorePath.handleStagingStart(makeRequest(), startRes);
+      const state = new URL(startRes.headers.Location).searchParams.get('state');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: 'new-access-token', refresh_token: 'new-refresh-token' }),
+      });
+
+      const res = makeResponse();
+      await handlersWithInvalidStorePath.handleStagingCallback(
+        makeRequest(`/api/integrations/thumbtack/oauth/staging/callback?code=test-code&state=${state}`),
+        res,
+      );
+
+      expect(res.status).toBe(502);
+      expect(res.body).not.toContain('Authorization Successful');
+    });
+
+    it('does not retain a prior refresh token on a fresh authorization-code exchange', async () => {
+      const store = await import('../lib/thumbtack-token-store.mjs');
+      store.createTokenStore({ encryptionKey: TEST_ENCRYPTION_KEY, storePath }).saveTokens({
+        accessToken: 'old-access-token',
+        refreshToken: 'old-refresh-token',
+      });
+      const state = startOAuth();
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: 'new-access-token' }),
+      });
+
+      const res = makeResponse();
+      await handlers.handleStagingCallback(
+        makeRequest(`/api/integrations/thumbtack/oauth/staging/callback?code=test-code&state=${state}`),
+        res,
+      );
+
+      const saved = store.createTokenStore({ encryptionKey: TEST_ENCRYPTION_KEY, storePath }).loadTokens();
+      expect(res.status).toBe(200);
+      expect(saved.refreshToken).toBe('');
     });
 
     it('rejects expired state', async () => {
@@ -345,5 +421,50 @@ describe('Thumbtack staging OAuth', () => {
       // test-code might appear in error messages like "Missing authorization code"
       // but the actual auth code "the-secret-code" should not appear anywhere
     });
+  });
+});
+
+describe('Thumbtack production OAuth', () => {
+  it('uses isolated production configuration and marks stored tokens as production', async () => {
+    const tmpDir = makeTempDir();
+    const storePath = makeTokenStorePath(tmpDir);
+    const handlers = createProductionOAuthHandlers({
+      clientId: TEST_CLIENT_ID,
+      clientSecret: TEST_CLIENT_SECRET,
+      authUrl: 'https://auth.thumbtack.com/oauth2/auth',
+      tokenUrl: 'https://auth.thumbtack.com/oauth2/token',
+      redirectUri: TEST_REDIRECT_URI,
+      scope: TEST_SCOPE,
+      encryptionKey: TEST_ENCRYPTION_KEY,
+      tokenStorePath: storePath,
+      isConfigured: true,
+    });
+    const startRes = makeResponse();
+    handlers.handleStagingStart(makeRequest('/api/integrations/thumbtack/oauth/start'), startRes);
+    const location = new URL(startRes.headers.Location);
+    const state = location.searchParams.get('state');
+    expect(location.origin).toBe('https://auth.thumbtack.com');
+    expect(location.searchParams.get('scope')).toBe(TEST_SCOPE);
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        access_token: 'production-access-token',
+        refresh_token: 'production-refresh-token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      }),
+      text: async () => '',
+    });
+    const callbackRes = makeResponse();
+    await handlers.handleStagingCallback(
+      makeRequest(`/api/integrations/thumbtack/oauth/callback?code=test-code&state=${state}`),
+      callbackRes,
+    );
+    const store = await import('../lib/thumbtack-token-store.mjs');
+    const saved = store.createTokenStore({ encryptionKey: TEST_ENCRYPTION_KEY, storePath }).loadTokens();
+    expect(callbackRes.status).toBe(200);
+    expect(callbackRes.body).toContain('Thumbtack production OAuth');
+    expect(saved.environment).toBe('production');
   });
 });

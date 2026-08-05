@@ -4,10 +4,17 @@
 import crypto from 'node:crypto';
 
 import {
+  thumbtackClientId,
+  thumbtackClientSecret,
+  thumbtackOAuthAuthUrl,
+  thumbtackOAuthTokenUrl,
+  thumbtackScopes,
+  thumbtackProductionTokenStorePath,
   thumbtackStagingClientId,
   thumbtackStagingClientSecret,
   thumbtackStagingOAuthAuthUrl,
   thumbtackStagingOAuthTokenUrl,
+  thumbtackStagingScopes,
   thumbtackTokenEncryptionKey,
   thumbtackTokenStorePath,
 } from '../lib/config.mjs';
@@ -16,7 +23,6 @@ import { send } from '../lib/http.mjs';
 
 const STATE_TTL = 5 * 60 * 1000; // 5 minutes
 const STAGING_REDIRECT_URI = 'https://carterspc.tailf72e3f.ts.net:8443/api/integrations/thumbtack/oauth/staging/callback';
-const STAGING_DEFAULT_SCOPE = 'offline_access supply::negotiations.write';
 
 // In-memory state store: Map<state, { state, createdAt, used }>
 const pendingStates = new Map();
@@ -49,8 +55,14 @@ function safeErrorHtml(message) {
   return `<!DOCTYPE html><html lang="en"><head><title>OAuth Error</title><meta charset="utf-8"></head><body><h1>Authorization Error</h1><p>${escapeHtml(message)}</p></body></html>`;
 }
 
-function safeSuccessHtml() {
-  return `<!DOCTYPE html><html lang="en"><head><title>OAuth Complete</title><meta charset="utf-8"></head><body><h1>Authorization Successful</h1><p>Thumbtack staging OAuth flow completed. You can close this window and return to the application.</p></body></html>`;
+function safeSuccessHtml(environment) {
+  return `<!DOCTYPE html><html lang="en"><head><title>OAuth Complete</title><meta charset="utf-8"></head><body><h1>Authorization Successful</h1><p>Thumbtack ${escapeHtml(environment)} OAuth flow completed. You can close this window and return to the application.</p></body></html>`;
+}
+
+function isValidScope(scope) {
+  return typeof scope === 'string'
+    && scope.trim().length > 0
+    && scope.trim().split(/\s+/).every((entry) => /^[A-Za-z0-9:_./-]+$/.test(entry));
 }
 
 /**
@@ -75,14 +87,19 @@ export function createStagingOAuthHandlers(options = {}) {
     stagingAuthUrl: options.stagingAuthUrl ?? thumbtackStagingOAuthAuthUrl,
     stagingTokenUrl: options.stagingTokenUrl ?? thumbtackStagingOAuthTokenUrl,
     redirectUri: options.redirectUri ?? STAGING_REDIRECT_URI,
-    scope: options.scope ?? STAGING_DEFAULT_SCOPE,
+    scope: options.scope ?? thumbtackStagingScopes,
     encryptionKey: options.encryptionKey ?? thumbtackTokenEncryptionKey,
     tokenStorePath: options.tokenStorePath ?? thumbtackTokenStorePath,
+    environment: options.environment ?? 'staging',
   };
 
+  const configurationError = !cfg.stagingClientId || !cfg.stagingClientSecret
+    || !cfg.stagingAuthUrl || !cfg.stagingTokenUrl
+    || !isValidScope(cfg.scope)
+    || !cfg.encryptionKey || !cfg.tokenStorePath;
   const isConfigured = options.isConfigured !== undefined
-    ? options.isConfigured
-    : Boolean(cfg.stagingClientId && cfg.stagingClientSecret && cfg.stagingAuthUrl && cfg.stagingTokenUrl);
+    ? options.isConfigured && !configurationError
+    : !configurationError;
 
   let tokenStore = null;
   function getStore() {
@@ -101,7 +118,7 @@ export function createStagingOAuthHandlers(options = {}) {
    */
   function handleStagingStart(req, res) {
     if (!isConfigured) {
-      send(res, 503, 'Staging OAuth not configured. Missing environment variables.\n', 'text/plain; charset=utf-8');
+      send(res, 503, `Thumbtack ${cfg.environment} OAuth not configured. Missing environment variables.\n`, 'text/plain; charset=utf-8');
       return;
     }
 
@@ -129,7 +146,7 @@ export function createStagingOAuthHandlers(options = {}) {
    */
   async function handleStagingCallback(req, res) {
     if (!isConfigured) {
-      send(res, 503, 'Staging OAuth not configured.\n', 'text/plain; charset=utf-8');
+      send(res, 503, `Thumbtack ${cfg.environment} OAuth not configured.\n`, 'text/plain; charset=utf-8');
       return;
     }
 
@@ -208,24 +225,37 @@ export function createStagingOAuthHandlers(options = {}) {
       }
 
       const tokenData = await tokenResponse.json();
+      if (!tokenData.access_token) {
+        console.error('[thumbtack-oauth] token exchange response missing access token');
+        send(res, 502, safeErrorHtml('Failed to store authorization tokens. Please try again.'), 'text/html; charset=utf-8');
+        return;
+      }
 
       // --- Step 6: Persist tokens ---
       const store = getStore();
-      if (store) {
-        store.saveTokens({
-          accessToken: tokenData.access_token || '',
-          refreshToken: tokenData.refresh_token || '',
-          tokenType: tokenData.token_type || 'Bearer',
-          scope: tokenData.scope || cfg.scope,
-          environment: 'staging',
-          expiresIn: tokenData.expires_in,
-          lastRefreshOutcome: 'oauth-success',
-        });
+      if (!store) {
+        send(res, 503, `Thumbtack ${cfg.environment} OAuth not configured.\n`, 'text/plain; charset=utf-8');
+        return;
+      }
+      store.saveTokens({
+        accessToken: tokenData.access_token,
+        // A fresh authorization-code exchange must not inherit a prior refresh token.
+        refreshToken: tokenData.refresh_token || '',
+        tokenType: tokenData.token_type || 'Bearer',
+        scope: tokenData.scope || cfg.scope,
+        environment: cfg.environment,
+        expiresIn: tokenData.expires_in,
+        lastRefreshOutcome: 'oauth-success',
+      });
+      const storedTokens = store.loadTokens();
+      if (!storedTokens || storedTokens.accessToken !== tokenData.access_token
+        || storedTokens.refreshToken !== (tokenData.refresh_token || '')) {
+        throw new Error('token persistence verification failed');
       }
 
       pendingStates.delete(state);
 
-      send(res, 200, safeSuccessHtml(), 'text/html; charset=utf-8');
+      send(res, 200, safeSuccessHtml(cfg.environment), 'text/html; charset=utf-8');
     } catch (err) {
       console.error(`[thumbtack-oauth] token exchange error: ${err.message}`);
       send(res, 502, safeErrorHtml('An error occurred during token exchange. Please try again.'), 'text/html; charset=utf-8');
@@ -235,7 +265,25 @@ export function createStagingOAuthHandlers(options = {}) {
   return { handleStagingStart, handleStagingCallback };
 }
 
+export function createProductionOAuthHandlers(options = {}) {
+  return createStagingOAuthHandlers({
+    stagingClientId: options.clientId ?? thumbtackClientId,
+    stagingClientSecret: options.clientSecret ?? thumbtackClientSecret,
+    stagingAuthUrl: options.authUrl ?? thumbtackOAuthAuthUrl,
+    stagingTokenUrl: options.tokenUrl ?? thumbtackOAuthTokenUrl,
+    redirectUri: options.redirectUri ?? 'https://carterspc.tailf72e3f.ts.net:8443/api/integrations/thumbtack/oauth/callback',
+    scope: options.scope ?? thumbtackScopes,
+    encryptionKey: options.encryptionKey ?? thumbtackTokenEncryptionKey,
+    tokenStorePath: options.tokenStorePath ?? thumbtackProductionTokenStorePath,
+    environment: 'production',
+    isConfigured: options.isConfigured,
+  });
+}
+
 // Default singleton handlers (pull from process.env via config module).
 const defaultHandlers = createStagingOAuthHandlers();
 export const handleStagingStart = defaultHandlers.handleStagingStart;
 export const handleStagingCallback = defaultHandlers.handleStagingCallback;
+const productionHandlers = createProductionOAuthHandlers();
+export const handleProductionStart = productionHandlers.handleStagingStart;
+export const handleProductionCallback = productionHandlers.handleStagingCallback;
