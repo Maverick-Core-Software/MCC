@@ -41,6 +41,7 @@ function makeHandler(secret = 'test-secret', options = {}) {
       eventsFile,
       automationFile,
       automation: options.automation,
+      processor: { process: async () => ({ action: 'test' }) },
     }),
     eventsFile,
     automationFile,

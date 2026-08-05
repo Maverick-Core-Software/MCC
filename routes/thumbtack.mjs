@@ -14,9 +14,11 @@ import {
 } from '../lib/config.mjs';
 import { readJsonBody, sendJson } from '../lib/http.mjs';
 import { extractCustomerLeadEvent } from '../lib/thumbtack-lead-state.mjs';
+import { createThumbtackLeadProcessor } from '../lib/thumbtack-lead-processor.mjs';
 import { getThumbtackAutomationStatus } from '../lib/thumbtack-policy.mjs';
 
 const loadedEventIds = new Map();
+const leadProcessor = createThumbtackLeadProcessor();
 
 function secureEqual(actual, expected) {
   const actualBuffer = Buffer.from(String(actual || ''));
@@ -67,6 +69,7 @@ export function createThumbtackWebhookHandler({
     nativeAutoReplyDisabled: thumbtackNativeAutoReplyDisabled,
     hcpWritesEnabled: thumbtackHcpWritesEnabled,
   }),
+  processor = leadProcessor,
 } = {}) {
   return async function handleThumbtackWebhook(req, res) {
     if (!secret) {
@@ -107,10 +110,10 @@ export function createThumbtackWebhookHandler({
       payload,
     };
 
+    const lead = extractCustomerLeadEvent(record);
     try {
       fs.mkdirSync(path.dirname(eventsFile), { recursive: true });
       fs.appendFileSync(eventsFile, `${JSON.stringify(record)}\n`, 'utf8');
-      const lead = extractCustomerLeadEvent(record);
       // Shadow records form an auditable queue for the lead-state engine. They
       // never include a generated response, invoke HCP, or send Thumbtack API writes.
       fs.appendFileSync(automationFile, `${JSON.stringify({
@@ -131,6 +134,7 @@ export function createThumbtackWebhookHandler({
     }
 
     console.log(`[thumbtack] captured ${record.eventType} negotiation=${record.negotiationID || '-'} message=${record.messageID || '-'}`);
+    if (lead) setImmediate(() => { void processor.process(record).catch(() => console.error('[thumbtack] lead processor failed')); });
     sendJson(res, 202, { received: true, duplicate: false, mode: automation.mode });
   };
 }
