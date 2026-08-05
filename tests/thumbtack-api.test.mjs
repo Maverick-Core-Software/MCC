@@ -122,21 +122,6 @@ describe('Thumbtack API client', () => {
       expect(url).toContain('/api/v4/businesses/biz-42');
     });
 
-    it('getNegotiations sends correct path', async () => {
-      const fetchSpy = makeMockFetch(200, []);
-      vi.spyOn(globalThis, 'fetch').mockImplementation(fetchSpy);
-
-      const client = createThumbtackApiClient({
-        apiBaseUrl: TEST_API_BASE,
-        stagingTokenUrl: TEST_TOKEN_URL,
-        tokenStore: makeMockStore(),
-      });
-
-      await client.getNegotiations('biz-1');
-      const url = fetchSpy.mock.calls[0][0];
-      expect(url).toContain('/api/v4/businesses/biz-1/negotiations');
-    });
-
     it('getNegotiation sends correct path', async () => {
       const fetchSpy = makeMockFetch(200, { id: 'neg-1' });
       vi.spyOn(globalThis, 'fetch').mockImplementation(fetchSpy);
@@ -435,7 +420,6 @@ describe('Thumbtack API client', () => {
       return [
         ['getBusinesses', () => client.getBusinesses()],
         ['getBusiness', () => client.getBusiness('biz-1')],
-        ['getNegotiations', () => client.getNegotiations('biz-1')],
         ['getNegotiation', () => client.getNegotiation('neg-1')],
         ['getMessageHistory', () => client.getMessageHistory('neg-1')],
         ['getBusinessAssociatePhoneNumbers', () => client.getBusinessAssociatePhoneNumbers('biz-1')],
