@@ -4,8 +4,16 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { thumbtackEventsFile, thumbtackWebhookSecret } from '../lib/config.mjs';
+import {
+  thumbtackAutoReplyEnabled,
+  thumbtackAutomationFile,
+  thumbtackEventsFile,
+  thumbtackHcpWritesEnabled,
+  thumbtackNativeAutoReplyDisabled,
+  thumbtackWebhookSecret,
+} from '../lib/config.mjs';
 import { readJsonBody, sendJson } from '../lib/http.mjs';
+import { getThumbtackAutomationStatus } from '../lib/thumbtack-policy.mjs';
 
 const loadedEventIds = new Map();
 
@@ -52,6 +60,12 @@ function eventSummary(payload) {
 export function createThumbtackWebhookHandler({
   secret = thumbtackWebhookSecret,
   eventsFile = thumbtackEventsFile,
+  automationFile = thumbtackAutomationFile,
+  automation = getThumbtackAutomationStatus({
+    autoReplyEnabled: thumbtackAutoReplyEnabled,
+    nativeAutoReplyDisabled: thumbtackNativeAutoReplyDisabled,
+    hcpWritesEnabled: thumbtackHcpWritesEnabled,
+  }),
 } = {}) {
   return async function handleThumbtackWebhook(req, res) {
     if (!secret) {
@@ -95,6 +109,17 @@ export function createThumbtackWebhookHandler({
     try {
       fs.mkdirSync(path.dirname(eventsFile), { recursive: true });
       fs.appendFileSync(eventsFile, `${JSON.stringify(record)}\n`, 'utf8');
+      // Shadow records form an auditable queue for the lead-state engine. They
+      // never include a generated response, invoke HCP, or send Thumbtack API writes.
+      fs.appendFileSync(automationFile, `${JSON.stringify({
+        id,
+        receivedAt: record.receivedAt,
+        eventType: record.eventType,
+        negotiationID: record.negotiationID,
+        messageID: record.messageID,
+        mode: automation.mode,
+        action: 'awaiting-lead-state-processing',
+      })}\n`, 'utf8');
       ids.add(id);
     } catch (error) {
       console.error(`[thumbtack] failed to persist webhook: ${error.message}`);
@@ -103,15 +128,23 @@ export function createThumbtackWebhookHandler({
     }
 
     console.log(`[thumbtack] captured ${record.eventType} negotiation=${record.negotiationID || '-'} message=${record.messageID || '-'}`);
-    sendJson(res, 202, { received: true, duplicate: false, mode: 'capture-only' });
+    sendJson(res, 202, { received: true, duplicate: false, mode: automation.mode });
   };
 }
 
 export const handleThumbtackWebhook = createThumbtackWebhookHandler();
 
 export function getThumbtackWebhookStatus(_req, res) {
+  const automation = getThumbtackAutomationStatus({
+    autoReplyEnabled: thumbtackAutoReplyEnabled,
+    nativeAutoReplyDisabled: thumbtackNativeAutoReplyDisabled,
+    hcpWritesEnabled: thumbtackHcpWritesEnabled,
+  });
   sendJson(res, 200, {
     state: thumbtackWebhookSecret ? 'ready' : 'not-configured',
-    mode: 'capture-only',
+    mode: automation.mode,
+    outboundEnabled: automation.outboundEnabled,
+    hcpWritesEnabled: automation.hcpWritesEnabled,
+    reasons: automation.reasons,
   });
 }

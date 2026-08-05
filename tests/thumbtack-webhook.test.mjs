@@ -30,11 +30,21 @@ function makeResponse() {
   };
 }
 
-function makeHandler(secret = 'test-secret') {
+function makeHandler(secret = 'test-secret', options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcc-thumbtack-'));
   tempDirs.push(dir);
   const eventsFile = path.join(dir, 'events.jsonl');
-  return { handler: createThumbtackWebhookHandler({ secret, eventsFile }), eventsFile };
+  const automationFile = path.join(dir, 'automation.jsonl');
+  return {
+    handler: createThumbtackWebhookHandler({
+      secret,
+      eventsFile,
+      automationFile,
+      automation: options.automation,
+    }),
+    eventsFile,
+    automationFile,
+  };
 }
 
 afterEach(() => {
@@ -59,7 +69,7 @@ describe('Thumbtack webhook intake', () => {
   });
 
   it('persists an authenticated event once and recognizes a retry', async () => {
-    const { handler, eventsFile } = makeHandler();
+    const { handler, eventsFile, automationFile } = makeHandler();
     const payload = {
       eventType: 'MessageCreatedV4',
       data: { messageID: 'msg-1', negotiationID: 'neg-1', text: 'Can you give me a price?' },
@@ -68,7 +78,7 @@ describe('Thumbtack webhook intake', () => {
     const first = makeResponse();
     await handler(makeRequest(payload), first);
     expect(first.status).toBe(202);
-    expect(JSON.parse(first.body)).toMatchObject({ received: true, duplicate: false, mode: 'capture-only' });
+    expect(JSON.parse(first.body)).toMatchObject({ received: true, duplicate: false, mode: 'shadow' });
 
     const retry = makeResponse();
     await handler(makeRequest(payload), retry);
@@ -83,6 +93,12 @@ describe('Thumbtack webhook intake', () => {
       negotiationID: 'neg-1',
       payload,
     });
+    const automationRecords = fs.readFileSync(automationFile, 'utf8').trim().split(/\r?\n/).map(JSON.parse);
+    expect(automationRecords).toEqual([expect.objectContaining({
+      id: records[0].id,
+      mode: 'shadow',
+      action: 'awaiting-lead-state-processing',
+    })]);
   });
 
   it('normalizes the self-serve webhook event envelope', async () => {
