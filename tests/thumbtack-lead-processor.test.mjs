@@ -150,4 +150,72 @@ describe('Thumbtack lead processor', () => {
     await expect(processor.process(record)).resolves.toMatchObject({ action: 'agent-failed' });
     expect(automationRecords(automationFile).at(-1)).toMatchObject({ action: 'agent-failed', error: 'Agent timed out.' });
   });
+
+  it('nudges the operator when a draft is held for review', async () => {
+    const { eventsFile, automationFile, record } = makeFixture({ priorEvents: [businessEvent()] });
+    const nudges = [];
+    const processor = createThumbtackLeadProcessor({
+      eventsFile, automationFile, outboundEnabled: true,
+      generateReply: async () => ({ success: true, reply: 'Following up on your project.' }),
+      sendMessage: async () => {},
+      notify: async message => { nudges.push(message); },
+    });
+    await expect(processor.process(record)).resolves.toMatchObject({ action: 'drafted-reply' });
+    expect(nudges).toHaveLength(1);
+    expect(nudges[0]).toContain('drafted-reply');
+    expect(nudges[0]).toContain('Sam');
+  });
+
+  it('nudges the operator for estimate-ready output', async () => {
+    const { eventsFile, automationFile, record } = makeFixture();
+    const nudges = [];
+    const processor = createThumbtackLeadProcessor({
+      eventsFile, automationFile, outboundEnabled: true,
+      generateReply: async () => ({ success: true, reply: '[THUMBTACK_ESTIMATE_READY]{"scope":"EV charger"}[/THUMBTACK_ESTIMATE_READY]' }),
+      sendMessage: async () => {},
+      notify: async message => { nudges.push(message); },
+    });
+    await expect(processor.process(record)).resolves.toMatchObject({ action: 'ready-for-estimate-review' });
+    expect(nudges).toHaveLength(1);
+    expect(nudges[0]).toContain('ready-for-estimate-review');
+  });
+
+  it('does not nudge when the draft auto-sends', async () => {
+    const { eventsFile, automationFile, record } = makeFixture();
+    const nudges = [];
+    const processor = createThumbtackLeadProcessor({
+      eventsFile, automationFile, outboundEnabled: true,
+      generateReply: async () => ({ success: true, reply: 'What amperage charger are you planning for?' }),
+      sendMessage: async () => {},
+      notify: async message => { nudges.push(message); },
+    });
+    await expect(processor.process(record)).resolves.toMatchObject({ action: 'auto-sent' });
+    expect(nudges).toEqual([]);
+  });
+
+  it('nudges the operator when a send fails', async () => {
+    const { eventsFile, automationFile, record } = makeFixture();
+    const nudges = [];
+    const processor = createThumbtackLeadProcessor({
+      eventsFile, automationFile, outboundEnabled: true,
+      generateReply: async () => ({ success: true, reply: 'What amperage charger are you planning for?' }),
+      sendMessage: async () => { throw new Error('Thumbtack API error (HTTP 500)'); },
+      notify: async message => { nudges.push(message); },
+    });
+    await expect(processor.process(record)).resolves.toMatchObject({ action: 'send-failed' });
+    expect(nudges).toHaveLength(1);
+    expect(nudges[0]).toContain('send-failed');
+  });
+
+  it('keeps processing when the notifier throws', async () => {
+    const { eventsFile, automationFile, record } = makeFixture({ priorEvents: [businessEvent()] });
+    const processor = createThumbtackLeadProcessor({
+      eventsFile, automationFile, outboundEnabled: true,
+      generateReply: async () => ({ success: true, reply: 'Following up on your project.' }),
+      sendMessage: async () => {},
+      notify: async () => { throw new Error('Twilio down'); },
+    });
+    await expect(processor.process(record)).resolves.toMatchObject({ action: 'drafted-reply' });
+    expect(automationRecords(automationFile).at(-1)).toMatchObject({ action: 'drafted-reply' });
+  });
 });
