@@ -1,5 +1,6 @@
-// Thumbtack webhook intake. Capture-only by design: persist authenticated events
-// before any agent, CRM, or outbound-message workflow is allowed to run.
+// Thumbtack webhook intake. Every authenticated event is persisted before any
+// agent workflow runs; the lead processor may auto-send a first-touch reply
+// only when the outbound policy gate is fully enabled.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -134,7 +135,7 @@ export function createThumbtackWebhookHandler({
     }
 
     console.log(`[thumbtack] captured ${record.eventType} negotiation=${record.negotiationID || '-'} message=${record.messageID || '-'}`);
-    if (lead) setImmediate(() => { void processor.process(record).catch(() => console.error('[thumbtack] lead processor failed')); });
+    if (lead) setImmediate(() => { void processor.process(record).catch(error => console.error(`[thumbtack] lead processor failed: ${error?.message || error}`)); });
     sendJson(res, 202, { received: true, duplicate: false, mode: automation.mode });
   };
 }
