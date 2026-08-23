@@ -1,41 +1,50 @@
 # PM2 App Registry
 
-Every pm2-managed app on CartersPC, its owning ecosystem file, and its ports.
-Source of truth: the ecosystem files below. `C:\ProgramData\pm2\dump.pm2` is a
-frozen snapshot — it is rewritten only by `pm2 save` and its env blocks go stale.
+**Updated 2026-08-22 (post-Night4 audit).** PM2 now runs on TWO hosts: Workbench
+(this PC, daemon as user `Carter`, dump at `C:\Users\carte\.pm2\dump.pm2` —
+`C:\ProgramData\pm2` is legacy/EPERM) and AIWA (Proxmox host, daemon as root,
+dump `/root/.pm2/dump.pm2`, resurrected at boot by `pm2-root.service`).
+Workbench boot resurrect: scheduled task `PM2 Resurrect At Boot` (S4U, +45s) +
+Startup-folder `pm2-resurrect.cmd` logon fallback. Source of truth: the
+ecosystem files below. Refresh the relevant dump with `pm2 save` after changes.
 
-## Apps (16 in dump.pm2)
+## Workbench apps (11 live, verified 2026-08-22)
 
 | App | Port(s) | Owning ecosystem file | Entry script | Notes |
 |-----|---------|-----------------------|--------------|-------|
-| llama-guardian | 8080 | `C:\Workspace\Infrastructure\llama-cpp-server\ecosystem.config.cjs` | `scripts\llama-guardian.py` (python) | Always-on gateway; owns 8080, proxies to qwen3-llama on 8081 |
-| qwen3-llama | 8081 | `C:\Workspace\Infrastructure\llama-cpp-server\ecosystem.config.cjs` | `llama-server.exe` | Defined but not currently listening; starts on demand via guardian. The Slack bot depends on the guardian chain via Tailscale `100.124.216.11:8080` |
-| mav-email-watcher | — | `C:\Workspace\Active\grizzly-hcp\ecosystem.config.cjs` | `src/automations/estimates/email-watcher.ts` (tsx) | |
-| customer-chat-server | 3012 | `C:\Workspace\Active\grizzly-hcp\ecosystem.config.cjs` | `src/server/customer-chat-server.ts` (tsx) | |
-| voice-server | 8765 | `C:\Workspace\Active\grizzly-hcp\ecosystem.config.cjs` | `src/agent/voice-server.ts` (tsx) | |
-| booking-approval-poller | — | `C:\Workspace\Active\grizzly-hcp\ecosystem.config.cjs` | `src/automations/bookings/approval-poller.ts` (tsx) | |
-| sync-estimates-weekly | — | `C:\Workspace\Active\grizzly-hcp\ecosystem.config.cjs` | `src/hcp/sync-estimates.ts` (tsx) | Cron `0 2 * * 0` (Sun 2 AM), `autorestart: false` — one-shot weekly job |
-| mav-console | 3000 | `C:\Workspace\Active\MCC\ecosystem.config.cjs` | `server.mjs` | MCC dashboard/API server |
+| llama-guardian | 8080 | `C:\Workspace\Infrastructure\llama-cpp-server\ecosystem.config.cjs` | `scripts\llama-guardian.py` (python) | Always-on gateway; owns 8080, proxies to local-llm on 8081. Reachable from AIWA at `100.124.41.115:8080` |
+| local-llm | 8081 | `C:\Workspace\Infrastructure\llama-cpp-server\ecosystem.config.cjs` | `llama-server.exe` (GLM-4.7-Flash) | Stopped when idle; guardian wakes it on demand |
+| pc-actions-daemon | 8901 | `C:\Workspace\Shared\Agents\Hermes-Supervisor\pc-actions-daemon\ecosystem.local.config.cjs` | `uvicorn main:app` (python) | Hermes PC bridge — AIWA hermes (gateway/pc-sms/triage) depends on it via Tailscale. Owning file is local-only/gitignored (contains PC_ACTIONS_TOKEN) |
+| hermes-sandbox-reaper | — | `C:\...\hermes-supervisor-deploy\sandbox-reaper\ecosystem.config.js` (deploy copy) | | Added post-registry; documented 2026-08-22 |
+| hermes-deadman-sink | — | `C:\...\hermes-supervisor-deploy\deadman-sink\ecosystem.config.js` (deploy copy) | | Added post-registry; documented 2026-08-22 |
 | prometheus-sync | — | `C:\Workspace\Active\MCC\ecosystem.config.cjs` | `scripts\prometheus-sync.mjs` | |
 | downloads-watcher | — | `C:\Workspace\Active\MCC\ecosystem.config.cjs` | `C:\Users\carte\DownloadsOrganizer\downloads_watcher.py` | |
 | mav-bridge | — | `C:\Workspace\Active\MCC\ecosystem.config.cjs` | `C:\Workspace\Active\SEO-Agents-App\scripts\mav-bridge.mjs` | Owned by MCC's file though the script lives in SEO-Agents-App |
 | homelab-agent-sensors | 7331 | `C:\Workspace\Shared\Agents\HomeLab-Agent\ecosystem.config.cjs` | `sensor_agent.py` (python) | Sensor mode: `NTFY_ENABLED=false` set explicitly in the ecosystem env |
-| fb-comment-agent | 8795 | `C:\Workspace\Active\SEO-Agents-App\ecosystem.config.cjs` | `scripts\facebook-comment-agent.mjs` | Ecosystem file added 2026-07-19 (was dump-only) |
-| maverick-dashboard | 8792 | `C:\Workspace\Shared\Maverick Integrations\workflows\dashboard\ecosystem.config.cjs` | `server.mjs --port 8792` | Ecosystem file added 2026-07-19 (was dump-only, empty/wrong cwd in dump). Folder is NOT a git repo |
-| housecall-pro-mcp | — (legacy archive) | `C:\Workspace\Infrastructure\housecall-pro-mcp\ecosystem.config.cjs` | `dist\index.js` | **Migrated to CT102 on 2026-07-21.** The PM2 entry is stopped and retained only for an explicitly approved rollback; CT102 `hcp-mcp.service` is authoritative on `:7332`/`:7333`. |
-| pc-actions-daemon | 8901 | `C:\Workspace\Shared\Agents\Hermes-Supervisor\pc-actions-daemon\ecosystem.local.config.cjs` | `uvicorn main:app` (python) | Owning file is local-only/gitignored (contains PC_ACTIONS_TOKEN) |
+| fb-comment-agent | 8795 | `C:\Workspace\Active\SEO-Agents-App\ecosystem.config.cjs` | `scripts\facebook-comment-agent.mjs` | Restarted 2026-08-22 after falling off during the CartersPC retirement |
+| maverick-dashboard | 8792 | `C:\Workspace\Shared\Maverick Integrations\workflows\dashboard\ecosystem.config.cjs` | `server.mjs --port 8792` | Folder is NOT a git repo |
 
-## Defined in ecosystem files but NOT in the dump
+## AIWA host apps (root pm2, `/opt/grizzly-hcp`, verified 2026-08-22)
+
+| App | Port(s) | Notes |
+|-----|---------|-------|
+| customer-chat-server | 3012 | grizzly customer chat |
+| mav-email-watcher | — | estimates email watcher |
+| mav-slack | — | Slack + employee SMS channel |
+| voice-server | 8765 | VOICE booking persona (ConversationRelay). Public: `https://aiwa.tailf72e3f.ts.net:10000` (Tailscale funnel → 8765); Twilio +14698963862 VoiceUrl repointed here 2026-08-22 (was dead carterspc:10000). Needs `VOICE_PUBLIC_URL` env |
+| booking-approval-poller | — | HCP notes + Twilio ops-SMS SCHEDULE approvals. Redeployed 2026-08-22 (was lost in CartersPC retirement) |
+| sync-estimates-weekly | — | stopped one-shot; schedule owned by AIWA systemd `hcp-estimates-sync.timer` |
+
+`mav-console` runs in CT 103 (`192.168.1.15:3000`), not under host pm2.
+
+## Defined in ecosystem files but NOT running
 
 - `maverickforge` — `C:\Workspace\Active\MCC\ecosystem.config.cjs` (AI Gateway, port 3012)
 - `mcc-dashboard-agent` — `C:\Workspace\Active\MCC\ecosystem.config.cjs` (HomeLab-Agent `agent.py`)
-- `mav-slack` — `C:\Workspace\Active\grizzly-hcp\ecosystem.config.cjs`
-
-These are registered on next `pm2 start <file>` + `pm2 save`; they are not running.
 
 > **Warning:** `maverickforge` is configured with `PORT: 3012`, which collides
-> with the live `customer-chat-server` (also 3012). Resolve the port before ever
-> starting it.
+> with `customer-chat-server` (also 3012, now on AIWA). Resolve the port before
+> ever starting it.
 
 ## Known hazards
 
