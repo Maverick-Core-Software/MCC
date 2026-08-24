@@ -5,6 +5,7 @@ import {
   parseLlamaMetrics,
   pickLocalCoreModelEntry,
   probeLlamaStatus,
+  safeDisplayModel,
 } from '../lib/llama-status.mjs';
 
 // A representative slice of real llama.cpp /metrics output, comments included.
@@ -41,6 +42,11 @@ assert.strictEqual(
   pickLocalCoreModelEntry({ data: [{ id: 'nemotron-3.5-lightning-30b-a3b' }] }, 'qwen3-14b'),
   null,
   'refuse AIWA-only catalog'
+);
+assert.strictEqual(
+  safeDisplayModel('nemotron-3.5-lightning-30b-a3b'),
+  'local-llm',
+  'AIWA LOCAL_MODEL misconfig falls back to local-llm'
 );
 
 function jsonResponse(status, body) {

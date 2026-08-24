@@ -5,6 +5,8 @@ import {
   pickLocalCoreModelEntry,
   probeLlamaStatus,
   baseUrl,
+  safeDisplayModel,
+  isAiwaCatalogId,
 } from '../lib/llama-status.mjs';
 
 const ENDPOINT = 'http://localhost:8080';
@@ -221,4 +223,31 @@ test('llama_up true but only AIWA catalog ids → online with configuredModel no
   assert.equal(status.model, CONFIGURED);
   assert.ok(!String(status.model).toLowerCase().includes('nemotron'));
   assert.ok(!String(status.model).toLowerCase().includes('qwen3.8'));
+});
+
+test('safeDisplayModel refuses AIWA LOCAL_MODEL misconfig', () => {
+  assert.equal(isAiwaCatalogId('nemotron-3.5-lightning-30b-a3b'), true);
+  assert.equal(safeDisplayModel('nemotron-3.5-lightning-30b-a3b'), 'local-llm');
+  assert.equal(safeDisplayModel('qwen3.8-27b'), 'local-llm');
+  assert.equal(safeDisplayModel('qwen3-14b'), 'qwen3-14b');
+});
+
+test('misconfigured LOCAL_MODEL AIWA id is not displayed while online', async () => {
+  const fetchImpl = mockFetch({
+    '/__guardian/health': jsonResponse(200, { status: 'ok', llama_up: true }),
+    '/v1/models': jsonResponse(200, {
+      data: [{ id: 'nemotron-3.5-lightning-30b-a3b' }],
+    }),
+    '/metrics': textResponse(200, SAMPLE_METRICS),
+  });
+
+  const status = await probeLlamaStatus({
+    fetchImpl,
+    endpoint: ENDPOINT,
+    configuredModel: 'nemotron-3.5-lightning-30b-a3b',
+  });
+
+  assert.equal(status.state, 'online');
+  assert.equal(status.model, 'local-llm');
+  assert.equal(status.configuredModel, 'nemotron-3.5-lightning-30b-a3b');
 });
