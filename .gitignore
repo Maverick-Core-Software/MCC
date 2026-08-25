@@ -16,3 +16,6 @@ tmp/
 /app/
 src/lib/build-test.js
 INVESTIGATION_*.md
+
+# env backups written by secret rotations (hold old secrets; never commit)
+**/.env.bak-*
