@@ -64,3 +64,27 @@ describe('sendOpsSms', () => {
     expect(result).toMatchObject({ sent: false });
   });
 });
+
+describe('sendOpsSms From number', () => {
+  const savedFrom = process.env.OPS_SMS_FROM;
+  afterEach(() => {
+    if (savedFrom === undefined) delete process.env.OPS_SMS_FROM;
+    else process.env.OPS_SMS_FROM = savedFrom;
+  });
+
+  it('prefers OPS_SMS_FROM (ops line) over TWILIO_PHONE_NUMBER (customer line)', async () => {
+    configureEnv();
+    process.env.OPS_SMS_FROM = '+15550001546';
+    const calls = [];
+    await sendOpsSms('hello', { fetchImpl: async (url, init) => { calls.push(init); return { ok: true }; } });
+    expect(new URLSearchParams(calls[0].body).get('From')).toBe('+15550001546');
+  });
+
+  it('falls back to TWILIO_PHONE_NUMBER when OPS_SMS_FROM is unset', async () => {
+    configureEnv();
+    delete process.env.OPS_SMS_FROM;
+    const calls = [];
+    await sendOpsSms('hello', { fetchImpl: async (url, init) => { calls.push(init); return { ok: true }; } });
+    expect(new URLSearchParams(calls[0].body).get('From')).toBe('+15550001111');
+  });
+});
