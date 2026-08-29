@@ -39,12 +39,16 @@ ecosystem files below. Refresh the relevant dump with `pm2 save` after changes.
 
 ## Defined in ecosystem files but NOT running
 
-- `maverickforge` — `C:\Workspace\Active\MCC\ecosystem.config.cjs` (AI Gateway, port 3012)
 - `mcc-dashboard-agent` — `C:\Workspace\Active\MCC\ecosystem.config.cjs` (HomeLab-Agent `agent.py`)
 
-> **Warning:** `maverickforge` is configured with `PORT: 3012`, which collides
-> with `customer-chat-server` (also 3012, now on AIWA). Resolve the port before
-> ever starting it.
+
+## Retired
+
+- `maverickforge` - removed from `ecosystem.config.cjs` on 2026-08-29. Its script
+  (`AI Gateway\server\index.mjs`) never existed, so `pm2 start` on that file
+  failed with "Script not found" every time, and it claimed PORT 3012 which
+  belongs to `mav-assistant` locally and `customer-chat-server` on AIWA.
+  Do not re-add it.
 
 ## Known hazards
 

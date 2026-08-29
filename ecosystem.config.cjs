@@ -78,20 +78,12 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       windowsHide: true,
     },
-    {
-      name: 'maverickforge',
-      script: 'server/index.mjs',
-      cwd: 'C:\\Workspace\\Infrastructure\\AI Gateway',
-      interpreter: 'node',
-      watch: false,
-      autorestart: true,
-      max_restarts: 10,
-      min_uptime: '15s',
-      restart_delay: 3000,
-      env: { NODE_ENV: 'production', PORT: 3012 },
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      windowsHide: true,
-    },
+    // maverickforge was RETIRED 2026-08-29. Its script
+    // (C:\\Workspace\\Infrastructure\\AI Gateway\\server\\index.mjs) does not exist -- every
+    // `pm2 start` on this file failed with "Script not found". It also claimed
+    // PORT 3012, which belongs to mav-assistant (C:\\Workspace\\Active\\maverick-assistant,
+    // its own repo + ecosystem file) and to customer-chat-server on AIWA.
+    // Do not re-add it here.
     // qwen3-llama and llama-guardian are NOT defined here. Their canonical
     // definitions live in C:\Workspace\Infrastructure\llama-cpp-server\
     // ecosystem.config.cjs (llama on :8081, guardian proxying :8080). A stale
