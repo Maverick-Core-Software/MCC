@@ -24,13 +24,12 @@ ecosystem files below. Refresh the relevant dump with `pm2 save` after changes.
 | fb-comment-agent | 8795 | `C:\Workspace\Active\SEO-Agents-App\ecosystem.config.cjs` | `scripts\facebook-comment-agent.mjs` | Restarted 2026-08-22 after falling off during the CartersPC retirement |
 | maverick-dashboard | 8792 | `C:\Workspace\Shared\Maverick Integrations\workflows\dashboard\ecosystem.config.cjs` | `server.mjs --port 8792` | Folder is NOT a git repo |
 
-## AIWA host apps (root pm2, `/opt/grizzly-hcp`, verified 2026-08-22)
+## AIWA host apps (root pm2, `/opt/grizzly-hcp`, verified 2026-09-02)
 
 | App | Port(s) | Notes |
 |-----|---------|-------|
 | customer-chat-server | 3012 | grizzly customer chat |
 | mav-email-watcher | — | estimates email watcher |
-| mav-slack | — | Slack + employee SMS channel |
 | voice-server | 8765 | VOICE booking persona (ConversationRelay). Public: `https://aiwa.tailf72e3f.ts.net:10000` (Tailscale funnel → 8765); Twilio +14698963862 VoiceUrl repointed here 2026-08-22 (was dead carterspc:10000). Needs `VOICE_PUBLIC_URL` env |
 | booking-approval-poller | — | HCP notes + Twilio ops-SMS SCHEDULE approvals. Redeployed 2026-08-22 (was lost in CartersPC retirement) |
 | sync-estimates-weekly | — | stopped one-shot; schedule owned by AIWA systemd `hcp-estimates-sync.timer` |
@@ -44,6 +43,15 @@ ecosystem files below. Refresh the relevant dump with `pm2 save` after changes.
 
 ## Retired
 
+- `mav-slack` (AIWA root pm2) - deleted from PM2 and `pm2 save`d on 2026-09-02,
+  removed from grizzly-hcp `ecosystem.config.cjs`. It was the grizzly-hcp Slack
+  bot (`src/automations/slack/index.ts`, Bolt Socket Mode) for `#maverick-agent`
+  and DMs. Its Slack app (the old "Maverick", A0BDV7S96FP) was uninstalled and
+  then deleted on 2026-09-02, the channel was archived, and Slack returned
+  `account_inactive` on every start — ~5,900 PM2 restarts. HCP questions in Slack
+  are answered by the Hermes "Maverick" app (A0BGR3QHLA2) in `#ask-maverick`.
+  Rollback ref: `/root/.pm2/dump.pm2.bak-mav-slack-retire-20260903T023155Z`.
+  Do not re-add it without a new Slack app.
 - `maverickforge` - removed from `ecosystem.config.cjs` on 2026-08-29. Its script
   (`AI Gateway\server\index.mjs`) never existed, so `pm2 start` on that file
   failed with "Script not found" every time, and it claimed PORT 3012 which
