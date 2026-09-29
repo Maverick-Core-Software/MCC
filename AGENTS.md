@@ -85,5 +85,5 @@ from that directory. Must be set in `.env` as `HCP_DIR`.
 
 - All three repos must be selected at Codex web session creation for MCC to be clonable
 - If MCC clone fails with "repository not authorized", start a fresh session with all 3 repos selected
-- RAG API is at `http://192.168.1.12:8181` (LAN only, same network as CartersPC)
-- MCC runs on CartersPC (Windows 11, i5-13600K, RTX 4060 Ti), managed by PM2
+- RAG API is at `http://192.168.1.12:8181` (LAN only, same network as CMB-Workbench)
+- MCC runs on CMB-Workbench (Windows 11, i5-13600K, RTX 4060 Ti), managed by PM2

@@ -87,8 +87,8 @@ git add -p && git commit -m "session: <brief description>"
 | Project ID | `prj_cu8Im5rWsAhYJPQj8aaEWqdzCYuG` |
 | Team | `barnscarter-ops-projects` (`team_PU4iVzo6aSfn8SG0BJYETfkc`) |
 | Production URL | `homelab-noc-dashboard.vercel.app` |
-| Deployment method | `vercel deploy --prod` from CartersPC (not auto-deploy) |
-| Key env var | `VITE_API_BASE=https://carterspc.tailf72e3f.ts.net` (set in Vercel project settings) |
+| Deployment method | `vercel deploy --prod` from CMB-Workbench (not auto-deploy) |
+| Key env var | `VITE_API_BASE=https://cmb-workbench.tailf72e3f.ts.net` (set in Vercel project settings) |
 
 ---
 
@@ -96,8 +96,8 @@ git add -p && git commit -m "session: <brief description>"
 
 | Setting | Value |
 |---|---|
-| URL | `https://carterspc.tailf72e3f.ts.net` |
-| Target | CartersPC port 3000 (server.mjs / mav-console) |
+| URL | `https://cmb-workbench.tailf72e3f.ts.net` |
+| Target | CMB-Workbench port 3000 (server.mjs / mav-console) |
 | Status | Active — confirmed HTTP 200 on 2026-06-14 |
 | CORS | Configured in server.mjs to allow Vercel origin |
 

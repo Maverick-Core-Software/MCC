@@ -95,7 +95,7 @@ thumbtackTokenStorePath        // THUMBTACK_TOKEN_STORE_PATH (optional, default 
 
 **Registered staging redirect URI** (from PLAN.md original scope):
 ```
-https://carterspc.tailf72e3f.ts.net:8443/api/integrations/thumbtack/oauth/staging/callback
+https://cmb-workbench.tailf72e3f.ts.net:8443/api/integrations/thumbtack/oauth/staging/callback
 ```
 
 ### Conventions
@@ -142,7 +142,7 @@ All single-session waves run sequentially. Only Wave 1 has parallelism. Given th
 **Tasks:**
 1. Research the current official Thumbtack Partner API documentation: environments, OAuth 2.0 authorization-code flow, Business Associate Phone Numbers API, Negotiation Messages API, and Job Signals API.
 2. Record the exact staging authorization URL, token URL, API base URL, authorization parameters, required scopes, token-refresh semantics, and any PKCE requirement. Do NOT infer staging hostnames from production defaults — find staging-specific documentation.
-3. Verify whether the staging redirect URI `https://carterspc.tailf72e3f.ts.net:8443/api/integrations/thumbtack/oauth/staging/callback` matches the portal's registered callback format.
+3. Verify whether the staging redirect URI `https://cmb-workbench.tailf72e3f.ts.net:8443/api/integrations/thumbtack/oauth/staging/callback` matches the portal's registered callback format.
 4. Verify the approved scope set (Business Associate Phone Numbers + Negotiation Job Signals) against the approval email requirements.
 5. Write the staging configuration matrix to `docs/thumbtack-staging-runbook.md` — a short, non-secret reference showing: staging endpoints, redirect URI, allowed scopes, token-refresh semantics, and documentation date. **No secrets, no Client IDs, no URLs with credentials.**
 
