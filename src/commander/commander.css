@@ -1,0 +1,85 @@
+/* Maverick Commander v2 shell styles (additive — styles.css untouched). */
+.commanderShell {
+  background: #0b0e14;
+  color: #e8edf5;
+  min-height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.commanderHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #232836;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+.commanderBrand {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  display: block;
+}
+.commanderSubtitle {
+  font-size: 0.85rem;
+  color: #9aa7bd;
+}
+.commanderClock { text-align: right; }
+.commanderTime {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+  display: block;
+}
+.commanderDate { font-size: 0.8rem; color: #9aa7bd; }
+.commanderAgentCounts { font-size: 0.9rem; letter-spacing: 0.03em; }
+.commanderError { color: #ef4444; }
+.commanderGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .commanderGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .commanderGrid { grid-template-columns: 1fr; }
+}
+.commanderEmpty {
+  color: #9aa7bd;
+  font-style: italic;
+  margin: 8px 0 4px;
+}
+.commanderEmptySub {
+  color: #7d8aa0;
+  font-size: 0.85rem;
+  margin: 0 0 8px;
+}
+.commanderTerminal {
+  background: #05070c;
+  border: 1px solid #232836;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  min-height: 120px;
+}
+.commanderDemoBadge {
+  display: inline-block;
+  background: #3b2f08;
+  color: #fbbf24;
+  border: 1px solid #8a6d1a;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin: 4px 0 8px;
+}
+.commanderGaugeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-around;
+}
