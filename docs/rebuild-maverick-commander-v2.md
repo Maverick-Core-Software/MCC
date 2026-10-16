@@ -13,7 +13,8 @@ setup, not from fixing old wiring.
 ## Panels (7)
 
 1. **Agent activity feed** — live terminal-style scrolling list of what
-   agents are doing across the workbench.
+   agents are doing across the workbench. LIVE: `GET /api/agents/feed`
+   (see `routes/agents.mjs`) polled every 3s by `src/commander/panels/AgentFeed.jsx`.
 2. **Social monitor** — new comments, new posts, messages, GBP metrics.
    Now possible: Facebook is integrated and the GBP API transfer is live.
 3. **Hardware** — aiwa (Proxmox) + workbench. GPU available / loaded /
@@ -44,6 +45,17 @@ setup, not from fixing old wiring.
 - SEO bridge (old): `GET /seo/status`, `GET /seo/actions`,
   `POST /seo/actions/approve`, `POST /seo/actions/run` via the Windows
   bridge. Confirm still valid before wiring Panel 7.
+
+## Panel 1 feed (interim)
+- Interim feed = **Claude agent updates** via `POST /api/agents/feed`
+  (`{ agent, level, message }`, level in `info|warn|error`, `ts` defaults to
+  now). `GET /api/agents/feed` returns the contract shape
+  `{ entries: [{ ts, agent, level, message }], agents: [{ name, status }] }`.
+- Entries are in-memory only (last 500); a server restart clears the feed.
+  Persistence is a later step.
+- Long-term = **Orca agent-agnostic feed** (Carter investigating). The
+  server adapter translates Orca's shape into this same contract when ready,
+  so the panel does not change.
 
 ## Build rules
 - Additive only on this branch until Carter reviews. Do not modify

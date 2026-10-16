@@ -19,6 +19,7 @@ import { getLlamaStatus } from './lib/llama-status.mjs';
 import { getZaiStatus } from './lib/zai-status.mjs';
 import { handleExtractFile } from './lib/extract.mjs';
 import { getSeoWorkflowStatus, proxySeoActions } from './routes/seo.mjs';
+import { getAgentFeed, postAgentFeed } from './routes/agents.mjs';
 import {
   getOrchestratorStatus, createOrchestratorPlan, createLocalWorkerBrief,
   createTaskRun, updateTaskRun,
@@ -191,6 +192,15 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/workflows/seo') {
     sendJson(res, 200, await getSeoWorkflowStatus());
+    return;
+  }
+  // Panel 1 — Agent activity feed (Maverick Commander rebuild).
+  if (url.pathname === '/api/agents/feed' && req.method === 'GET') {
+    getAgentFeed(req, res);
+    return;
+  }
+  if (url.pathname === '/api/agents/feed' && req.method === 'POST') {
+    await postAgentFeed(req, res);
     return;
   }
   if (url.pathname === '/api/workflows/seo/actions') {
